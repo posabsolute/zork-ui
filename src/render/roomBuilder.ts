@@ -1,15 +1,19 @@
 /*
  * roomBuilder.ts — render each room as glowing vector line-art.
  *
- * Design language: 1980 vector graphics (think Battlezone, the same year Zork
- * shipped). Luminous wireframe on pure black, a tight per-region phosphor palette,
- * a grid floor for depth. Doorways are bright portal frames where the room really
- * has exits; solid walls are quiet outlines. No texture, no filter — just light
- * and line. The glow comes from a real bloom pass, not a fake scanline.
+ * The shell (floor/ceiling/pillars/grid + portal doorways at the real exits) is
+ * built here; region-specific atmosphere (trees, furniture, columns, water...) is
+ * added by decorateRoom. Design language: 1980 vector graphics meets Another
+ * World silhouettes — luminous line on black, a tight per-region palette.
  */
 import * as THREE from "three";
 import type { Room } from "../engine/roomState.ts";
 import { vectorColor } from "../config/regions.ts";
+import {
+  type Seg, line, rectXZ, makeLines, makeLabel, diamond,
+  hashStr, mulberry32,
+} from "./lineKit.ts";
+import { decorateRoom } from "./decor.ts";
 
 const CARDINAL: Record<string, THREE.Vector2> = {
   NORTH: new THREE.Vector2(0, -1),
@@ -26,39 +30,32 @@ export interface BuiltRoom {
 export function buildRoom(room: Room): BuiltRoom {
   const group = new THREE.Group();
   const color = vectorColor(room.region);
-  const dim = new THREE.Color(color).multiplyScalar(0.45).getHex();
+  const dimColor = new THREE.Color(color).multiplyScalar(0.45).getHex();
+  const rng = mulberry32(hashStr(room.id));
 
   const W = 7 + ((room.value ?? 5) % 5);
   const H = 3.4;
   const D = 7 + ((room.id.length * 7) % 5);
   const doorW = 2.0;
   const doorH = 2.6;
-
-  const seg: number[] = []; // bright structural lines
-  const grid: number[] = []; // dim floor grid
-
   const hx = W / 2,
     hz = D / 2;
 
-  // Floor & ceiling rectangles
-  rect(seg, -hx, 0, -hz, hx, 0, hz);
-  rect(seg, -hx, H, -hz, hx, H, hz);
-  // Corner pillars
-  for (const [sx, sz] of [
-    [-hx, -hz],
-    [hx, -hz],
-    [hx, hz],
-    [-hx, hz],
-  ]) {
+  const seg: Seg = [];
+  const grid: Seg = [];
+
+  // Shell: floor + ceiling + corner pillars.
+  rectXZ(seg, -hx, -hz, hx, hz, 0);
+  rectXZ(seg, -hx, -hz, hx, hz, H);
+  for (const [sx, sz] of [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]]) {
     line(seg, sx, 0, sz, sx, H, sz);
   }
 
-  // Vector grid floor (the iconic perspective grid)
-  const step = 1.0;
-  for (let x = -hx; x <= hx + 0.001; x += step) line(grid, x, 0.01, -hz, x, 0.01, hz);
-  for (let z = -hz; z <= hz + 0.001; z += step) line(grid, -hx, 0.01, z, hx, 0.01, z);
+  // Vector grid floor.
+  for (let x = -hx; x <= hx + 0.001; x += 1) line(grid, x, 0.01, -hz, x, 0.01, hz);
+  for (let z = -hz; z <= hz + 0.001; z += 1) line(grid, -hx, 0.01, z, hx, 0.01, z);
 
-  // Which directions are real exits?
+  // Portal frames where the room really has exits.
   const open = (dir: string) => {
     const e = room.exits[dir];
     return !!e && e.kind !== "blocked";
@@ -71,29 +68,23 @@ export function buildRoom(room: Room): BuiltRoom {
     else if (dir === "SE" || dir === "SW") doorDirs.add("SOUTH");
     else if (dir === "IN" || dir === "OUT") doorDirs.add("SOUTH");
   }
-
-  // Portal frames on walls that have exits.
-  const portal: number[] = [];
+  const portal: Seg = [];
   for (const dir of ["NORTH", "SOUTH", "EAST", "WEST"]) {
     if (!doorDirs.has(dir)) continue;
-    const onZ = dir === "NORTH" ? -hz : dir === "SOUTH" ? hz : 0;
-    const onX = dir === "EAST" ? hx : dir === "WEST" ? -hx : 0;
-    if (dir === "NORTH" || dir === "SOUTH") {
-      doorRectXY(portal, -doorW / 2, 0, doorW / 2, doorH, onZ, true);
-    } else {
-      doorRectXY(portal, -doorW / 2, 0, doorW / 2, doorH, onX, false);
-    }
+    if (dir === "NORTH") portalXY(portal, -doorW / 2, doorW / 2, doorH, -hz, true);
+    else if (dir === "SOUTH") portalXY(portal, -doorW / 2, doorW / 2, doorH, hz, true);
+    else if (dir === "EAST") portalXY(portal, -doorW / 2, doorW / 2, doorH, hx, false);
+    else portalXY(portal, -doorW / 2, doorW / 2, doorH, -hx, false);
   }
 
-  // Stairs up / hatch down as little stacked frames.
+  // Stairs up / chevrons down.
   if (open("UP")) {
     for (let i = 0; i < 4; i++) {
       const y = 0.3 + i * 0.35;
-      rect(seg, hx - 2.0, y, -hz + 0.6, hx - 0.6, y, -hz + 0.6 + 0.4 + i * 0.2);
+      rectXZ(seg, hx - 2.0, -hz + 0.6, hx - 0.6, -hz + 1.0 + i * 0.2, y);
     }
   }
   if (open("DOWN")) {
-    // downward chevrons in the floor
     for (let i = 0; i < 3; i++) {
       const z = hz - 0.8 - i * 0.4;
       line(portal, -hx + 0.8, 0.02, z, -hx + 1.6, 0.02, z + 0.5);
@@ -101,19 +92,22 @@ export function buildRoom(room: Room): BuiltRoom {
     }
   }
 
-  group.add(makeLines(seg, color, 1.0));
-  group.add(makeLines(grid, dim, 0.6));
-  group.add(makeLines(portal, color, 1.0));
+  group.add(makeLines(seg, color, 1));
+  group.add(makeLines(grid, dimColor, 0.55));
+  group.add(makeLines(portal, color, 1));
 
-  // Object markers: a glowing diamond + label.
+  // Region atmosphere.
+  for (const o of decorateRoom(room, color, { W, H, D }, rng)) group.add(o);
+
+  // Object markers.
   room.objects.forEach((id, i) => {
-    const angle = (i / Math.max(1, room.objects.length)) * Math.PI * 2;
-    const r = Math.min(W, D) / 2 - 1.6;
+    const angle = (i / Math.max(1, room.objects.length)) * Math.PI * 2 + rng();
+    const r = Math.min(W, D) / 2 - 1.8;
     const px = Math.cos(angle) * r;
     const pz = Math.sin(angle) * r;
-    const diamond: number[] = [];
-    diamondAt(diamond, px, 1.0, pz, 0.35);
-    group.add(makeLines(diamond, color, 1.0));
+    const dia: Seg = [];
+    diamond(dia, px, 1.0, pz, 0.35);
+    group.add(makeLines(dia, color, 1));
     group.add(makeLabel(id, color, new THREE.Vector3(px, 1.7, pz)));
   });
 
@@ -128,71 +122,14 @@ export function buildRoom(room: Room): BuiltRoom {
   return { group, entryFacing };
 }
 
-// ---- line helpers ---------------------------------------------------------
-function line(a: number[], x1: number, y1: number, z1: number, x2: number, y2: number, z2: number) {
-  a.push(x1, y1, z1, x2, y2, z2);
-}
-function rect(a: number[], x1: number, y: number, z1: number, x2: number, y2OrZ: number, z2: number) {
-  // axis-aligned rectangle in the XZ plane at height y (y2OrZ unused name kept simple)
-  const yy = y;
-  line(a, x1, yy, z1, x2, yy, z1);
-  line(a, x2, yy, z1, x2, yy, z2);
-  line(a, x2, yy, z2, x1, yy, z2);
-  line(a, x1, yy, z2, x1, yy, z1);
-}
-function doorRectXY(a: number[], x1: number, y1: number, x2: number, y2: number, plane: number, onZ: boolean) {
-  const p = (x: number, y: number) =>
+function portalXY(a: Seg, x1: number, x2: number, h: number, plane: number, onZ: boolean) {
+  const p = (x: number, y: number): [number, number, number] =>
     onZ ? [x, y, plane] : [plane, y, x];
-  const c = [p(x1, y1), p(x2, y1), p(x2, y2), p(x1, y2)];
+  const c = [p(x1, 0), p(x2, 0), p(x2, h), p(x1, h)];
   for (let i = 0; i < 4; i++) {
-    const s = c[i],
-      e = c[(i + 1) % 4];
+    const s = c[i], e = c[(i + 1) % 4];
     a.push(s[0], s[1], s[2], e[0], e[1], e[2]);
   }
-}
-function diamondAt(a: number[], x: number, y: number, z: number, s: number) {
-  const pts = [
-    [x, y + s, z],
-    [x + s, y, z],
-    [x, y - s, z],
-    [x - s, y, z],
-  ];
-  for (let i = 0; i < 4; i++) {
-    const p = pts[i],
-      q = pts[(i + 1) % 4];
-    a.push(p[0], p[1], p[2], q[0], q[1], q[2]);
-  }
-}
-
-function makeLines(positions: number[], color: number, opacity: number): THREE.LineSegments {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({
-    color,
-    transparent: opacity < 1,
-    opacity,
-  });
-  return new THREE.LineSegments(geo, mat);
-}
-
-function makeLabel(id: string, color: number, pos: THREE.Vector3): THREE.Sprite {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 48;
-  const ctx = canvas.getContext("2d")!;
-  ctx.font = "bold 26px 'Courier New', monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
-  ctx.fillText(id.replace(/-/g, " ").toLowerCase(), 128, 26);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.magFilter = THREE.NearestFilter;
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, transparent: true })
-  );
-  sprite.scale.set(2.6, 0.5, 1);
-  sprite.position.copy(pos);
-  return sprite;
 }
 
 function oppositeCardinal(dir?: string): string {

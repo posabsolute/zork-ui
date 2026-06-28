@@ -138,9 +138,10 @@ function classifyRegion(id, flags) {
   const n = id.toUpperCase();
   if (flags.includes("RWATERBIT") || /RIVER|STREAM|RESERVOIR|DAM|REservoir/i.test(n))
     return "river";
-  if (/FOREST|CLEARING|PATH|TREE|MOUNTAIN|CANYON|FORE|GRATING-CLEAR|RAINBOW|ARAGAIN|ABOVE/.test(n))
+  // True interiors only — the "*-OF-HOUSE" rooms are outdoors (forest edge).
+  if (/^(KITCHEN|LIVING-ROOM|ATTIC|STUDIO|GALLERY)$/.test(n)) return "house";
+  if (/FOREST|CLEARING|PATH|TREE|MOUNTAIN|CANYON|FORE|GRATING-CLEAR|RAINBOW|ARAGAIN|ABOVE|OF-HOUSE|STONE-BARROW/.test(n))
     return "forest";
-  if (/HOUSE|KITCHEN|LIVING-ROOM|ATTIC/.test(n)) return "house";
   if (/TEMPLE|ALTAR|EGYPT|TORCH|DOME|TREASURE/.test(n)) return "temple";
   if (/HADES|DEAD|ENTRANCE-TO-HADES/.test(n)) return "hades";
   if (/MINE|COAL|LADDER|MACHINE|DRAFTY|SHAFT|TIMBER|SQUEAK|GAS/.test(n)) return "mine";
