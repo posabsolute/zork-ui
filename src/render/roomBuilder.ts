@@ -10,7 +10,7 @@ import * as THREE from "three";
 import type { Room } from "../engine/roomState.ts";
 import { getPalette, OBJECT_HIGHLIGHT } from "../config/regions.ts";
 import {
-  type Seg, line, rectXZ, makeLines, makeLabel,
+  type Seg, line, rectXZ, makeLines,
   hashStr, mulberry32,
 } from "./lineKit.ts";
 import { decorateRoom } from "./decor.ts";
@@ -54,9 +54,9 @@ export function buildRoom(room: Room): BuiltRoom {
     line(seg, sx, 0, sz, sx, H, sz);
   }
 
-  // Vector grid floor.
-  for (let x = -hx; x <= hx + 0.001; x += 1) line(grid, x, 0.01, -hz, x, 0.01, hz);
-  for (let z = -hz; z <= hz + 0.001; z += 1) line(grid, -hx, 0.01, z, hx, 0.01, z);
+  // Sparse vector grid floor — suggests depth without filling the frame.
+  for (let x = -hx; x <= hx + 0.001; x += 2) line(grid, x, 0.01, -hz, x, 0.01, hz);
+  for (let z = -hz; z <= hz + 0.001; z += 2) line(grid, -hx, 0.01, z, hx, 0.01, z);
 
   // Portal frames where the room really has exits.
   const open = (dir: string) => {
@@ -96,7 +96,7 @@ export function buildRoom(room: Room): BuiltRoom {
   }
 
   group.add(makeLines(seg, palette.primary, 1));
-  group.add(makeLines(grid, palette.detail, 0.55));
+  group.add(makeLines(grid, palette.detail, 0.35));
   group.add(makeLines(portal, palette.accent, 1)); // exits glow in the accent
 
   // Hero rooms override procedural atmosphere with hand-authored geometry.
@@ -149,7 +149,6 @@ function placeObjects(
   for (const id of room.objects) {
     const icon = buildObjectIcon(id, id);
     const ls = makeLines(icon.segs, color, 1);
-    let labelPos: THREE.Vector3;
 
     if (icon.kind === "wall") {
       const wall = wallOrder[wallTurn++ % wallOrder.length];
@@ -160,21 +159,18 @@ function placeObjects(
       else if (wall === "SOUTH") { ls.position.set(along, 0, hz - 0.05); ls.rotation.y = Math.PI; }
       else if (wall === "EAST") { ls.position.set(hx - 0.05, 0, along); ls.rotation.y = -Math.PI / 2; }
       else { ls.position.set(-hx + 0.05, 0, along); ls.rotation.y = Math.PI / 2; }
-      labelPos = ls.position.clone();
-      labelPos.y = icon.height + 0.25;
     } else if (icon.kind === "flat") {
       const slot = floorSlots[floorIdx++ % floorSlots.length];
       ls.position.set(slot.x * 0.4, 0.02, slot.z * 0.4);
-      labelPos = new THREE.Vector3(ls.position.x, 0.6, ls.position.z);
     } else {
       const slot = floorSlots[floorIdx++ % floorSlots.length];
       ls.position.set(slot.x, 0, slot.z);
       ls.rotation.y = Math.atan2(-slot.x, -slot.z);
-      labelPos = new THREE.Vector3(slot.x, icon.height + 0.3, slot.z);
     }
 
+    // No floating labels — the silhouettes (and the text terminal) speak for
+    // themselves, keeping the scene clean.
     group.add(ls);
-    group.add(makeLabel(id, color, labelPos, 0.7));
   }
 }
 

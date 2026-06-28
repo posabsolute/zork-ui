@@ -70,12 +70,12 @@ function whiteHouse(a: Seg, m: Map2, opts: { boardedDoor?: boolean; openWindow?:
 /** Open-field dressing: sparse tufts, a far tree line, a big starry sky. */
 function openField(a: Seg, dim: { W: number; H: number; D: number }, rng: () => number) {
   const hx = dim.W / 2, hz = dim.D / 2;
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 12; i++) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D, s = 0.06;
     line(a, x - s, dim.H - 0.1, z, x + s, dim.H - 0.1, z);
     line(a, x, dim.H - 0.1, z - s, x, dim.H - 0.1, z + s);
   }
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 6; i++) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D;
     line(a, x, 0.02, z, x - 0.1, 0.35, z);
     line(a, x, 0.02, z, x + 0.1, 0.35, z);

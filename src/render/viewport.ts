@@ -29,7 +29,7 @@ export class Viewport {
   constructor(private canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(1);
-    this.scene.background = new THREE.Color(0x02030a);
+    this.scene.background = new THREE.Color(0x000000); // true void
 
     this.camera = new THREE.PerspectiveCamera(72, 16 / 9, 0.1, 120);
     this.camera.position.set(0, 1.6, 2);
@@ -38,9 +38,9 @@ export class Viewport {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(1, 1),
-      0.7, // strength
-      0.5, // radius
-      0.12 // threshold — lines bloom, the void stays black
+      0.45, // strength — restrained glow
+      0.3, // radius — tight halo, not a wash
+      0.25 // threshold — only the bright line cores bloom; the void stays black
     );
     this.composer.addPass(bloom);
     this.composer.addPass(new OutputPass());

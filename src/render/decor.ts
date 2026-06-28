@@ -89,8 +89,8 @@ function ceilingBeams(d: Seg, dim: Dims, rng: RNG) {
 function forest(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz, H } = half(dim);
   const { primary: b, detail: d, accent: ac } = buf;
-  // Stars overhead (accent = warm pinpoints against the green).
-  for (let i = 0; i < 22; i++) {
+  // A few stars overhead (accent = warm pinpoints against the green).
+  for (let i = 0; i < 9; i++) {
     const x = -hx + rng() * dim.W;
     const z = -hz + rng() * dim.D;
     const s = 0.06;
@@ -105,12 +105,11 @@ function forest(buf: DecorBuf, dim: Dims, rng: RNG) {
     const z = edge < 0.5 ? -hz + rng() * dim.D : (rng() < 0.5 ? -hz + 0.6 : hz - 0.6);
     tree(b, ac, x, z, 2.4 + rng() * 1.0, rng);
   }
-  // Ground tufts.
-  for (let i = 0; i < 10; i++) {
+  // A few ground tufts.
+  for (let i = 0; i < 5; i++) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D;
     line(d, x, 0.02, z, x - 0.12, 0.4, z);
     line(d, x, 0.02, z, x + 0.12, 0.4, z);
-    line(d, x, 0.02, z, x, 0.45, z + 0.05);
   }
 }
 
@@ -169,15 +168,15 @@ function house(buf: DecorBuf, dim: Dims, rng: RNG) {
 function cave(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz, H } = half(dim);
   const { primary: b, detail: d, accent: ac } = buf;
-  stalactites(b, dim, rng, 6);
-  for (let i = 0; i < 4; i++) {
+  stalactites(b, dim, rng, 4);
+  for (let i = 0; i < 3; i++) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D;
     const h = 0.4 + rng() * 0.7;
     line(b, x, 0, z, x - 0.18, 0, z); line(b, x - 0.18, 0, z, x, h, z);
     line(b, x, h, z, x + 0.18, 0, z); line(b, x + 0.18, 0, z, x, 0, z);
   }
   timberPost(b, hx - 0.6, hz - 0.6, H);
-  rubble(d, dim, rng, 8);
+  rubble(d, dim, rng, 4);
   stoneAccents(d, dim, rng);
   // A glinting mineral vein (accent) on a wall.
   zigzag(ac, -hx + 0.06, 0.6, -hz + rng() * dim.D, 1.8, 0.0, 5);
@@ -312,7 +311,7 @@ function rubble(d: Seg, dim: Dims, rng: RNG, n: number) {
 
 function stoneAccents(d: Seg, dim: Dims, rng: RNG) {
   const { hx, hz, H } = half(dim);
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 5; i++) {
     const onZ = rng() < 0.5;
     const y = 0.3 + rng() * (H - 0.6);
     if (onZ) {
