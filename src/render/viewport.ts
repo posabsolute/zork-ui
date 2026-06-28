@@ -1,10 +1,10 @@
 /*
  * viewport.ts — the first-person vector view of the current room.
  *
- * Glowing line-art on black. The only post-processing is a genuine bloom pass
- * (the phosphor glow of a vector monitor) plus OutputPass for correct colour —
- * no scanlines, no chromatic aberration, no PS1 jitter. Rooms swap on change,
- * placing the camera inside the doorway the player came through.
+ * Glowing neon line-art on black with a real bloom pass (no scanlines, no PS1).
+ * A Geometry-Wars-style reactive grid warps underfoot and ripples on every
+ * command; a particle field gives the void depth; the camera punches on action.
+ * Rooms swap on change, placing the camera inside the doorway you came through.
  */
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -12,37 +12,48 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { buildRoom, type BuiltRoom } from "./roomBuilder.ts";
+import { ReactiveGrid } from "./reactiveGrid.ts";
+import { ParticleField } from "./particles.ts";
+import { getPalette, scaleColor } from "../config/regions.ts";
 import type { Room } from "../engine/roomState.ts";
+
+const OUTDOOR = new Set(["forest"]);
 
 export class Viewport {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private composer: EffectComposer;
+  private bloom: UnrealBloomPass;
+
+  private grid: ReactiveGrid;
+  private particles: ParticleField;
 
   private current: BuiltRoom | null = null;
   private targetYaw = 0;
   private bobT = 0;
+  private energy = 0; // action "juice", decays each frame
+  private baseFov = 72;
   private clock = new THREE.Clock();
   private running = true;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(1);
-    this.scene.background = new THREE.Color(0x000000); // true void
+    this.scene.background = new THREE.Color(0x000000);
 
-    this.camera = new THREE.PerspectiveCamera(72, 16 / 9, 0.1, 120);
+    this.camera = new THREE.PerspectiveCamera(this.baseFov, 16 / 9, 0.1, 140);
     this.camera.position.set(0, 1.6, 2);
+
+    this.grid = new ReactiveGrid();
+    this.scene.add(this.grid.object);
+    this.particles = new ParticleField();
+    this.scene.add(this.particles.object);
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(1, 1),
-      0.45, // strength — restrained glow
-      0.3, // radius — tight halo, not a wash
-      0.25 // threshold — only the bright line cores bloom; the void stays black
-    );
-    this.composer.addPass(bloom);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.7, 0.4, 0.18);
+    this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
     document.addEventListener("visibilitychange", () => {
@@ -67,6 +78,23 @@ export class Viewport {
     this.camera.position.copy(pos);
     this.camera.lookAt(0, 1.4, 0);
     this.targetYaw = this.camera.rotation.y;
+
+    const palette = getPalette(room.region);
+    const isOutdoor = OUTDOOR.has(room.region);
+    // Outdoor: cool sky-blue stars + a cool grid. Indoor: warm motes + region grid.
+    this.grid.setColor(isOutdoor ? 0x2a5a8f : scaleColor(palette.primary, 0.5));
+    this.particles.configure(
+      isOutdoor ? 0x9fd8ff : scaleColor(palette.primary, 0.8),
+      isOutdoor ? "stars" : "motes"
+    );
+    // Arriving in a room is itself an event.
+    this.pulse(0.7);
+  }
+
+  /** React to a player action: ripple the grid and punch the camera/bloom. */
+  pulse(strength = 1) {
+    this.grid.pulse(this.bobT, 0, 0, strength);
+    this.energy = Math.min(1.2, this.energy + strength);
   }
 
   private resize() {
@@ -82,13 +110,21 @@ export class Viewport {
   private loop = () => {
     if (!this.running) return;
     requestAnimationFrame(this.loop);
-    const dt = this.clock.getDelta();
+    const dt = Math.min(0.05, this.clock.getDelta());
     this.bobT += dt;
 
     const sway = Math.sin(this.bobT * 0.7) * 0.012;
     this.camera.rotation.y = this.targetYaw + sway;
     this.camera.position.y = 1.6 + Math.sin(this.bobT * 1.4) * 0.02;
 
+    // Action juice: brief FOV punch + bloom flare, decaying.
+    this.energy = Math.max(0, this.energy - dt * 1.6);
+    this.camera.fov = this.baseFov - this.energy * 5;
+    this.camera.updateProjectionMatrix();
+    this.bloom.strength = 0.7 + this.energy * 0.5;
+
+    this.grid.update(this.bobT);
+    this.particles.update(this.bobT);
     this.current?.animate?.(this.bobT);
     this.composer.render();
   };

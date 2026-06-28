@@ -66,7 +66,15 @@ export function zigzag(a: Seg, x: number, y0: number, z: number, y1: number, amp
 export function makeLines(positions: Seg, color: number, opacity = 1): THREE.LineSegments {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({ color, transparent: opacity < 1, opacity });
+  // Additive blending on black = neon: overlapping strokes intensify and the
+  // bloom pass turns the bright cores into glow (Geometry Wars / Tempest look).
+  const mat = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
   return new THREE.LineSegments(geo, mat);
 }
 

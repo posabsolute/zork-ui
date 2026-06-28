@@ -40,6 +40,8 @@ async function start() {
       },
       onCommand(line) {
         rooms.noteCommand(line);
+        // Every action ripples the world — the scene reacts to you.
+        viewport.pulse(1);
       },
       onInputReady() {
         rooms.update(latestStatus);

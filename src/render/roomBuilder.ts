@@ -24,6 +24,9 @@ const CARDINAL: Record<string, THREE.Vector2> = {
   WEST: new THREE.Vector2(-1, 0),
 };
 
+// Regions rendered open to the sky (no ceiling/walls).
+const OUTDOOR = new Set(["forest"]);
+
 export interface BuiltRoom {
   group: THREE.Group;
   entryFacing: (dir?: string) => { pos: THREE.Vector3 };
@@ -47,18 +50,16 @@ export function buildRoom(room: Room): BuiltRoom {
     hz = D / 2;
 
   const seg: Seg = [];
-  const grid: Seg = [];
+  const outdoor = OUTDOOR.has(room.region);
 
-  // Shell: floor + ceiling + corner pillars.
-  rectXZ(seg, -hx, -hz, hx, hz, 0);
-  rectXZ(seg, -hx, -hz, hx, hz, H);
-  for (const [sx, sz] of [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]]) {
-    line(seg, sx, 0, sz, sx, H, sz);
+  // Indoor rooms are enclosed (ceiling + corner pillars); outdoor rooms are open
+  // to the sky — only the reactive ground grid and the horizon beneath the stars.
+  if (!outdoor) {
+    rectXZ(seg, -hx, -hz, hx, hz, H);
+    for (const [sx, sz] of [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]]) {
+      line(seg, sx, 0, sz, sx, H, sz);
+    }
   }
-
-  // Sparse vector grid floor — suggests depth without filling the frame.
-  for (let x = -hx; x <= hx + 0.001; x += 2) line(grid, x, 0.01, -hz, x, 0.01, hz);
-  for (let z = -hz; z <= hz + 0.001; z += 2) line(grid, -hx, 0.01, z, hx, 0.01, z);
 
   // Portal frames where the room really has exits.
   const open = (dir: string) => {
@@ -98,7 +99,6 @@ export function buildRoom(room: Room): BuiltRoom {
   }
 
   group.add(makeLines(seg, palette.primary, 1));
-  group.add(makeLines(grid, palette.detail, 0.35));
   group.add(makeLines(portal, palette.accent, 1)); // exits glow in the accent
 
   // Hero rooms override procedural atmosphere with hand-authored geometry.
