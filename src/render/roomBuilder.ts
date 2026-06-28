@@ -56,9 +56,9 @@ export function buildRoom(room: Room): BuiltRoom {
   const seg: Seg = [];
   const outdoor = OUTDOOR.has(room.region);
 
-  // Indoor rooms are enclosed (ceiling + corner pillars); outdoor rooms are open
-  // to the sky — only the reactive ground grid and the horizon beneath the stars.
-  if (!outdoor) {
+  // Indoor rooms are enclosed (ceiling + corner pillars); outdoor rooms and
+  // full-3D "view" rooms (fixed camera) are open — no enclosing shell.
+  if (!outdoor && !hero?.camera) {
     rectXZ(seg, -hx, -hz, hx, hz, H);
     for (const [sx, sz] of [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]]) {
       line(seg, sx, 0, sz, sx, H, sz);

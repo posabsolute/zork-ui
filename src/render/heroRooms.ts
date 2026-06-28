@@ -294,17 +294,25 @@ function landscape(o: LandOpts): HeroSpec {
         out.push(m);
         out.push(makeLines(thread, 0x9bf0ff, 1));
       } else if (water === "lake") {
-        const wy = FLOORY + 0.05;
-        out.push(glowPoly([[-30, wy, 4], [30, wy, 4], [22, wy, RIDGE + 1.5], [-22, wy, RIDGE + 1.5]], 0x1aa6d8, 0.3));
+        // A water surface read through perspective ripple bands (no boxy fill):
+        // wavy horizontal lines getting closer together toward the horizon.
+        const wy = FLOORY + 0.04;
         const rip: Seg = [];
-        for (let zi = 0; zi < 7; zi++) {
-          const z = 3 - zi * 4.4;
-          let px = -26;
-          for (let x = -24; x <= 26; x += 4) { line(rip, px, wy + 0.02, z + Math.sin(px * 0.3) * 0.12, x, wy + 0.02, z + Math.sin(x * 0.3 + 1) * 0.12); px = x; }
+        const M = 16;
+        for (let i = 0; i < M; i++) {
+          const t = i / M;
+          const z = 3 - t * (3 - (RIDGE + 2));
+          const hw = 30 * (1 - t * 0.5); // narrower far = perspective
+          let px = -hw, py = wy;
+          for (let x = -hw; x <= hw; x += hw / 7) {
+            const ny = wy + Math.sin(x * 0.22 + i) * 0.1;
+            line(rip, px, py, z, x, ny, z);
+            px = x; py = ny;
+          }
         }
-        out.push(moving(makeLines(rip, 0x6bdcff, 0.5), "water"));
-        const far: Seg = []; line(far, -22, wy, RIDGE + 1.5, 22, wy, RIDGE + 1.5);
-        out.push(makeLines(far, 0x9bf0ff, 1)); // bright waterline at the cliff base
+        out.push(moving(makeLines(rip, 0x37c2ec, 0.4), "water"));
+        const far: Seg = []; line(far, -15, wy, RIDGE + 2, 15, wy, RIDGE + 2);
+        out.push(makeLines(far, 0x9bf0ff, 0.85)); // bright waterline at the far shore
       }
 
       // foreground: a framing rim (vista) or a near bank (at water)
@@ -1686,13 +1694,13 @@ function treeLine(out: THREE.Object3D[], z: number, color = 0x2f8a4a) {
 
 // === Redo the house-exterior rooms as solid 3D ===
 Object.assign(HERO_ROOMS, {
-  "WEST-OF-HOUSE": houseRoom("An open field west of the white house, its boarded front door facing you.", "door", ["FRONT-DOOR"]),
+  "WEST-OF-HOUSE": houseRoom("An open field west of the white house, its boarded front door facing you.", "door", ["FRONT-DOOR", "MAILBOX"], true),
   "NORTH-OF-HOUSE": houseRoom("The north side of the white house; all the windows are boarded, a path leads north.", "windows"),
   "SOUTH-OF-HOUSE": houseRoom("The south side of the white house; the windows are boarded.", "windows"),
   "EAST-OF-HOUSE": houseRoom("Behind the white house; a small window is ajar.", "ajar"),
 });
 
-function houseRoom(note: string, front: "door" | "windows" | "ajar", suppress?: string[]): HeroSpec {
+function houseRoom(note: string, front: "door" | "windows" | "ajar", suppress?: string[], mailbox = false): HeroSpec {
   return {
     note,
     suppress,
@@ -1702,6 +1710,15 @@ function houseRoom(note: string, front: "door" | "windows" | "ajar", suppress?: 
       out.push(surface([[-34, 0, 10], [34, 0, 10], [34, 0, -30], [-34, 0, -30]], 0x14200f)); // grassy field
       treeLine(out, -26);
       for (const o of house3D(0, -6, front)) out.push(o);
+      if (mailbox) {
+        const m: Seg = [];
+        const mx = -3.4, mz = 3.5; // standing in the field, in front of you
+        line(m, mx, 0, mz, mx, 1.0, mz); // post
+        boxEdges(m, mx, 1.25, mz, 0.7, 0.45, 0.5); // the box
+        line(m, mx + 0.35, 1.1, mz, mx + 0.7, 1.45, mz); // raised flag
+        rectXY(m, mx + 0.55, 1.3, mx + 0.85, 1.55, mz);
+        out.push(makeLines(m, 0xfff0d0, 1));
+      }
       return out;
     },
   };
