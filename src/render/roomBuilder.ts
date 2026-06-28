@@ -27,6 +27,8 @@ const CARDINAL: Record<string, THREE.Vector2> = {
 export interface BuiltRoom {
   group: THREE.Group;
   entryFacing: (dir?: string) => { pos: THREE.Vector3 };
+  /** Optional per-frame animation for hero rooms. */
+  animate?: (t: number) => void;
 }
 
 export function buildRoom(room: Room): BuiltRoom {
@@ -100,8 +102,10 @@ export function buildRoom(room: Room): BuiltRoom {
   group.add(makeLines(portal, palette.accent, 1)); // exits glow in the accent
 
   // Hero rooms override procedural atmosphere with hand-authored geometry.
+  let heroObjs: THREE.Object3D[] | null = null;
   if (hero) {
-    for (const o of hero.build({ dims: { W, H, D }, palette, rng })) group.add(o);
+    heroObjs = hero.build({ dims: { W, H, D }, palette, rng });
+    for (const o of heroObjs) group.add(o);
   } else {
     for (const o of decorateRoom(room, palette, { W, H, D }, rng)) group.add(o);
   }
@@ -119,7 +123,10 @@ export function buildRoom(room: Room): BuiltRoom {
     };
   };
 
-  return { group, entryFacing };
+  const animate =
+    hero?.animate && heroObjs ? (t: number) => hero.animate!(heroObjs!, t) : undefined;
+
+  return { group, entryFacing, animate };
 }
 
 function placeObjects(

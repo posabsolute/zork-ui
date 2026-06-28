@@ -8,8 +8,10 @@
  * registry is the tracked set (also mirrored in HEROES.md).
  */
 import * as THREE from "three";
-import { type Seg, line, rectXZ, makeLines } from "./lineKit.ts";
-import { type Palette, scaleColor } from "../config/regions.ts";
+import {
+  type Seg, line, rectXZ, rectXY, boxEdges, diamond, zigzag, makeLines,
+} from "./lineKit.ts";
+import { type Palette, scaleColor, FIRE_COLOR, WATER_COLOR } from "../config/regions.ts";
 
 export interface HeroCtx {
   dims: { W: number; H: number; D: number };
@@ -22,6 +24,8 @@ export interface HeroSpec {
   palette?: number;
   /** Build the room's bespoke geometry. Shell, portals and objects still render. */
   build: (ctx: HeroCtx) => THREE.Object3D[];
+  /** Optional per-frame animation over the objects build() returned. */
+  animate?: (objs: THREE.Object3D[], t: number) => void;
   /** Short note for the tracking doc. */
   note: string;
 }
@@ -97,6 +101,65 @@ function southWall(dim: { D: number }): Map2 {
 function northWall(dim: { D: number }): Map2 {
   const hz = dim.D / 2;
   return (u, y) => [u, y, -hz + 0.1];
+}
+
+// --- more set pieces -------------------------------------------------------
+/** A humanoid silhouette (head/body/limbs) standing at (x,z), facing +z. */
+function figure(a: Seg, x: number, z: number, scale = 1) {
+  const s = scale;
+  // head
+  diamond(a, x, 1.55 * s, z, 0.16 * s);
+  // torso
+  line(a, x, 1.4 * s, z, x, 0.75 * s, z);
+  // arms
+  line(a, x, 1.25 * s, z, x - 0.35 * s, 1.0 * s, z);
+  line(a, x, 1.25 * s, z, x + 0.35 * s, 1.0 * s, z);
+  // legs
+  line(a, x, 0.75 * s, z, x - 0.22 * s, 0, z);
+  line(a, x, 0.75 * s, z, x + 0.22 * s, 0, z);
+}
+
+/** A ring (circle) in the XZ plane at height y. */
+function ring(a: Seg, cx: number, cz: number, r: number, y: number, seg = 28) {
+  let px = cx + r, pz = cz;
+  for (let i = 1; i <= seg; i++) {
+    const t = (i / seg) * Math.PI * 2;
+    const nx = cx + Math.cos(t) * r, nz = cz + Math.sin(t) * r;
+    line(a, px, y, pz, nx, y, nz);
+    px = nx; pz = nz;
+  }
+}
+
+/** A semicircular arch in the XY plane at depth z. */
+function archXY(a: Seg, cx: number, baseY: number, z: number, r: number, top: number) {
+  line(a, cx - r, 0, z, cx - r, baseY, z);
+  line(a, cx + r, 0, z, cx + r, baseY, z);
+  let px = cx - r, py = baseY;
+  for (let i = 1; i <= 12; i++) {
+    const t = (i / 12) * Math.PI;
+    const nx = cx - Math.cos(t) * r, ny = baseY + Math.sin(t) * (top - baseY);
+    line(a, px, py, z, nx, ny, z);
+    px = nx; py = ny;
+  }
+}
+
+/** A fluted column from floor to height H at (x,z). */
+function column(a: Seg, x: number, z: number, H: number, r = 0.3) {
+  rectXZ(a, x - r, z - r, x + r, z + r, 0.12);
+  rectXZ(a, x - r, z - r, x + r, z + r, H - 0.2);
+  for (let k = 0; k < 6; k++) {
+    const ang = (k / 6) * Math.PI * 2;
+    const px = x + Math.cos(ang) * r, pz = z + Math.sin(ang) * r;
+    line(a, px, 0.12, pz, px, H - 0.2, pz);
+  }
+  boxEdges(a, x, H - 0.1, z, r * 2.4, 0.2, r * 2.4);
+}
+
+/** A flame cluster (several zig-zag tongues) at (x,z). */
+function flame(a: Seg, x: number, z: number, h: number) {
+  zigzag(a, x, 0, z, h, 0.12, 5);
+  zigzag(a, x - 0.12, 0, z, h * 0.7, 0.08, 4);
+  zigzag(a, x + 0.12, 0, z, h * 0.7, 0.08, 4);
 }
 
 // --- the registry (the tracked hero set) -----------------------------------
@@ -185,6 +248,342 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
         makeLines(focal, palette.accent, 1),
         makeLines(dim, scaleColor(palette.primary, 0.5), 0.7),
       ];
+    },
+  },
+  "CELLAR": {
+    note: "Where you fall in: a steep ramp up the west wall, the trap door open above.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], ac: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      // Ramp up the west wall.
+      line(a, -hx, 0, hz - 0.6, -hx + 2.6, H - 0.4, hz - 0.6);
+      line(a, -hx, 0, hz - 2.6, -hx + 2.6, H - 0.4, hz - 2.6);
+      line(a, -hx + 2.6, H - 0.4, hz - 0.6, -hx + 2.6, H - 0.4, hz - 2.6);
+      line(a, -hx, 0, hz - 0.6, -hx, 0, hz - 2.6);
+      // Trap door open in the ceiling, light spilling through (accent).
+      rectXZ(ac, -0.8, -0.8, 0.8, 0.8, H - 0.02);
+      for (let i = -2; i <= 2; i++) line(ac, (i * 0.8) / 2, H - 0.02, -0.8, (i * 0.4), 1.4, 0.0);
+      return [makeLines(a, palette.primary, 1), makeLines(ac, palette.accent, 0.8)];
+    },
+  },
+  "TROLL-ROOM": {
+    note: "The nasty troll, bloody axe in hand, blocking the way.",
+    build: ({ palette }) => {
+      const body: Seg = [], axe: Seg = [], blood: Seg = [];
+      figure(body, 0, -0.5, 1.5); // hulking troll
+      // axe: handle + blade
+      line(axe, 0.5, 1.4, -0.5, 1.1, 1.9, -0.5);
+      diamond(axe, 1.1, 1.95, -0.5, 0.3);
+      // bloodstains on the floor
+      for (const [x, z] of [[-1.4, 0.8], [0.9, 1.2], [-0.3, -1.4]]) diamond(blood, x, 0.02, z, 0.2);
+      return [
+        makeLines(body, palette.primary, 1),
+        makeLines(axe, palette.accent, 1),
+        makeLines(blood, FIRE_COLOR, 0.7),
+      ];
+    },
+  },
+  "ROUND-ROOM": {
+    note: "The great circular hub; passages radiate in every direction.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], dim: Seg = [];
+      const H = dims.H, r = Math.min(dims.W, dims.D) / 2 - 0.4;
+      ring(a, 0, 0, r, 0.02);
+      ring(a, 0, 0, r, H - 0.05);
+      ring(dim, 0, 0, r * 0.6, 0.02);
+      ring(dim, 0, 0, r * 0.3, 0.02);
+      // central column
+      column(a, 0, 0, H, 0.35);
+      // spokes
+      for (let k = 0; k < 8; k++) {
+        const t = (k / 8) * Math.PI * 2;
+        line(dim, 0, 0.02, 0, Math.cos(t) * r, 0.02, Math.sin(t) * r);
+      }
+      return [makeLines(a, palette.primary, 1), makeLines(dim, palette.detail, 0.5)];
+    },
+  },
+  "LOUD-ROOM": {
+    note: "Deafening: visible rings of sound ripple outward without end.",
+    build: ({ dims, palette }) => {
+      const objs: THREE.Object3D[] = [];
+      const r = Math.min(dims.W, dims.D) / 2 - 0.3;
+      for (let i = 0; i < 4; i++) {
+        const seg: Seg = [];
+        ring(seg, 0, 0, r, 1.2);
+        const m = makeLines(seg, palette.accent, 1);
+        m.userData.kind = "ripple";
+        m.userData.phase = i / 4;
+        m.userData.rmax = r;
+        objs.push(m);
+      }
+      return objs;
+    },
+    animate: (objs, t) => {
+      for (const o of objs as any[]) {
+        if (o.userData.kind !== "ripple") continue;
+        const s = ((t / 2.4 + o.userData.phase) % 1);
+        o.scale.setScalar(0.15 + s * 1.1);
+        o.material.transparent = true;
+        o.material.opacity = 1 - s;
+      }
+    },
+  },
+  "TORCH-ROOM": {
+    note: "A torch on a pillar lights a vast dome high overhead.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], fire: Seg = [];
+      const H = dims.H;
+      const out: THREE.Object3D[] = [];
+      // pedestal
+      boxEdges(a, 0, 0.5, 0, 0.6, 1.0, 0.6);
+      // dome ribs overhead, each rotated around the centre
+      const ribR = Math.min(dims.W, dims.D) / 2 - 0.5;
+      for (let k = 0; k < 4; k++) {
+        const rib: Seg = [];
+        archXY(rib, 0, H - 1.4, 0, ribR, H - 0.1);
+        const ribObj = makeLines(rib, palette.detail, 0.6);
+        ribObj.rotation.y = (k / 4) * Math.PI;
+        out.push(ribObj);
+      }
+      // torch flame on the pedestal
+      flame(fire, 0, 0, 0.8);
+      const flameObj = makeLines(fire, FIRE_COLOR, 1);
+      flameObj.position.y = 1.0;
+      flameObj.userData.kind = "flame";
+      out.unshift(makeLines(a, palette.primary, 1));
+      out.push(flameObj);
+      return out;
+    },
+    animate: (objs, t) => {
+      for (const o of objs as any[]) {
+        if (o.userData.kind !== "flame") continue;
+        o.scale.y = 1 + Math.sin(t * 11) * 0.12 + Math.sin(t * 7.3) * 0.06;
+        o.material.transparent = true;
+        o.material.opacity = 0.75 + 0.25 * Math.abs(Math.sin(t * 9));
+      }
+    },
+  },
+  "EGYPT-ROOM": {
+    note: "The gold coffin of the ancient pharaohs rests here, gleaming.",
+    build: ({ palette }) => {
+      const a: Seg = [], gold: Seg = [];
+      // sarcophagus
+      boxEdges(gold, 0, 0.4, 0, 1.0, 0.8, 2.2);
+      // tapered lid lines + face panel
+      line(gold, -0.5, 0.8, -1.1, 0.5, 0.8, -1.1);
+      diamond(gold, 0, 0.85, -0.7, 0.25); // mask
+      rectXY(a, -0.4, 0.85, 0.4, 1.4, -1.1);
+      return [makeLines(a, palette.primary, 1), makeLines(gold, palette.accent, 1)];
+    },
+  },
+  "SOUTH-TEMPLE": {
+    note: "The altar; two candles gutter in the still air.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [];
+      const hz = dims.D / 2, H = dims.H;
+      boxEdges(a, 0, 0.5, -hz + 1.4, 1.6, 1.0, 0.9); // altar
+      archXY(a, 0, 1.0, -hz + 0.04, 1.4, H - 1.0); // arch behind
+      const out: THREE.Object3D[] = [];
+      for (const cx of [-0.6, 0.6]) {
+        line(a, cx, 1.0, -hz + 1.4, cx, 1.4, -hz + 1.4); // candlestick
+        const f: Seg = [];
+        zigzag(f, cx, 1.4, -hz + 1.4, 1.7, 0.05, 3);
+        const fo = makeLines(f, FIRE_COLOR, 1);
+        fo.userData.kind = "candle";
+        out.push(fo);
+      }
+      out.unshift(makeLines(a, palette.primary, 1));
+      return out;
+    },
+    animate: (objs, t) => {
+      for (const o of objs as any[]) {
+        if (o.userData.kind !== "candle") continue;
+        o.scale.y = 1 + Math.sin(t * 13 + o.id) * 0.18;
+        o.material.transparent = true;
+        o.material.opacity = 0.7 + 0.3 * Math.abs(Math.sin(t * 10 + o.id));
+      }
+    },
+  },
+  "NORTH-TEMPLE": {
+    note: "The temple; a brass bell hangs above, a prayer book on its stand.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], ac: Seg = [];
+      const H = dims.H;
+      column(a, -dims.W / 2 + 0.8, -1, H);
+      column(a, dims.W / 2 - 0.8, -1, H);
+      // bell
+      line(ac, 0, H, 0, 0, H - 0.6, 0);
+      const by = H - 1.2;
+      line(ac, -0.4, by, 0, -0.3, by + 0.6, 0);
+      line(ac, 0.4, by, 0, 0.3, by + 0.6, 0);
+      line(ac, -0.4, by, 0, 0.4, by, 0);
+      // book on a stand
+      boxEdges(a, 0, 0.9, 1.2, 0.7, 0.1, 0.5);
+      line(a, 0, 0, 1.2, 0, 0.9, 1.2);
+      return [makeLines(a, palette.primary, 1), makeLines(ac, palette.accent, 1)];
+    },
+  },
+  "ENTRANCE-TO-HADES": {
+    note: "The gates of Hades; spectral wisps drift before the barred portal.",
+    build: ({ dims, palette }) => {
+      const gate: Seg = [];
+      const hz = dims.D / 2;
+      rectXY(gate, -1.4, 0, 1.4, 2.6, -hz + 0.05);
+      for (let i = -2; i <= 2; i++) line(gate, i * 0.5, 0, -hz + 0.05, i * 0.5, 2.6, -hz + 0.05);
+      const out: THREE.Object3D[] = [makeLines(gate, palette.primary, 1)];
+      // drifting wisps
+      for (let i = 0; i < 4; i++) {
+        const w: Seg = [];
+        diamond(w, 0, 0, 0, 0.18);
+        const wo = makeLines(w, FIRE_COLOR, 0.9);
+        wo.position.set(-1.5 + i, 1.0 + (i % 2) * 0.4, -hz + 1.5 + i * 0.3);
+        wo.userData.kind = "wisp";
+        wo.userData.phase = i;
+        out.push(wo);
+      }
+      return out;
+    },
+    animate: (objs, t) => {
+      for (const o of objs as any[]) {
+        if (o.userData.kind !== "wisp") continue;
+        o.position.y = 1.1 + Math.sin(t * 1.5 + o.userData.phase) * 0.4;
+        o.material.transparent = true;
+        o.material.opacity = 0.5 + 0.5 * Math.abs(Math.sin(t * 2 + o.userData.phase));
+      }
+    },
+  },
+  "LAND-OF-LIVING-DEAD": {
+    note: "A ghoulish plain; shades wander, a crystal skull glows cold.",
+    build: ({ dims, palette }) => {
+      const ghosts: Seg = [], skull: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (const [x, z] of [[-hx + 1.5, -1], [hx - 2, 0.5], [-1, hz - 1.5], [1.5, -hz + 2]])
+        figure(ghosts, x, z, 0.9);
+      diamond(skull, 0, 1.0, 0, 0.35);
+      line(skull, -0.14, 0.85, 0, 0.14, 0.85, 0);
+      return [makeLines(ghosts, palette.detail, 0.6), makeLines(skull, palette.accent, 1)];
+    },
+  },
+  "CYCLOPS-ROOM": {
+    note: "The hungry cyclops looms; his single eye fixes on you.",
+    build: ({ palette }) => {
+      const body: Seg = [], eye: Seg = [];
+      figure(body, 0, -1, 2.2); // huge
+      diamond(eye, 0, 3.0, -1, 0.22); // single eye high up
+      const eo = makeLines(eye, FIRE_COLOR, 1);
+      eo.userData.kind = "eye";
+      return [makeLines(body, palette.primary, 1), eo];
+    },
+    animate: (objs, t) => {
+      for (const o of objs as any[]) {
+        if (o.userData.kind !== "eye") continue;
+        const blink = Math.sin(t * 0.8) > 0.96 ? 0.2 : 1; // occasional blink
+        o.scale.set(1, blink, 1);
+        o.material.transparent = true;
+        o.material.opacity = 0.7 + 0.3 * Math.abs(Math.sin(t * 3));
+      }
+    },
+  },
+  "TREASURE-ROOM": {
+    note: "The thief's hoard: heaps of jewels and a great chest.",
+    build: ({ palette }) => {
+      const a: Seg = [], gems: Seg = [];
+      boxEdges(a, 0, 0.4, -1, 1.4, 0.8, 0.9); // chest
+      line(a, -0.7, 0.8, -1.45, 0.7, 0.8, -1.45);
+      for (let i = 0; i < 10; i++) {
+        const ang = (i / 10) * Math.PI * 2;
+        diamond(gems, Math.cos(ang) * 1.6, 0.15, Math.sin(ang) * 1.6 + 0.5, 0.15);
+      }
+      figure(a, 1.8, 1.2, 1.0); // the thief lurking
+      return [makeLines(a, palette.primary, 1), makeLines(gems, palette.accent, 1)];
+    },
+  },
+  "DAM-ROOM": {
+    note: "The great dam; a control panel with a glowing bolt and bubble.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], ac: Seg = [];
+      const hx = dims.W / 2, H = dims.H;
+      // sloped dam wall on the north
+      const hz = dims.D / 2;
+      for (let i = 0; i <= 6; i++) {
+        const x = -hx + (dims.W * i) / 6;
+        line(a, x, 0, -hz + 0.1, x, H, -hz + 0.8);
+      }
+      line(a, -hx, H, -hz + 0.8, hx, H, -hz + 0.8);
+      // control panel
+      boxEdges(a, hx - 1.2, 1.0, 0, 0.1, 1.0, 1.4);
+      diamond(ac, hx - 1.2, 1.2, 0.3, 0.12); // glowing bubble
+      line(ac, hx - 1.2, 0.8, -0.3, hx - 1.2, 1.0, -0.3); // bolt
+      return [makeLines(a, palette.primary, 1), makeLines(ac, palette.accent, 1)];
+    },
+  },
+  "ON-RAINBOW": {
+    note: "Standing on the rainbow itself; its bands shimmer underfoot.",
+    build: ({ dims }) => {
+      const bands = [0xff5a52, 0xffa54a, 0xffe24a, 0x5dff8a, 0x5cc8ff, 0xc79bff];
+      const out: THREE.Object3D[] = [];
+      const hz = dims.D / 2;
+      bands.forEach((c, i) => {
+        const seg: Seg = [];
+        archXY(seg, 0, 0, -hz + 1 + i * 0.18, 4 + i * 0.4, 4 + i * 0.4);
+        const m = makeLines(seg, c, 1);
+        m.userData.kind = "band";
+        m.userData.phase = i / bands.length;
+        out.push(m);
+      });
+      return out;
+    },
+    animate: (objs, t) => {
+      for (const o of objs as any[]) {
+        if (o.userData.kind !== "band") continue;
+        o.material.transparent = true;
+        o.material.opacity = 0.55 + 0.45 * Math.abs(Math.sin(t * 2 + o.userData.phase * 6.28));
+      }
+    },
+  },
+  "ATTIC": {
+    note: "A dark, cramped attic; a table, a coil of rope, a nasty knife.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], ac: Seg = [];
+      const H = dims.H;
+      boxEdges(a, 0.5, 0.5, 0, 1.4, 0.1, 0.9); // table top
+      for (const [lx, lz] of [[-0.6, -0.4], [1.6, -0.4], [1.6, 0.4], [-0.6, 0.4]]) line(a, lx, 0, lz, lx, 0.5, lz);
+      // exposed rafters
+      for (let i = 0; i < 3; i++) line(a, -dims.W / 2, H - 0.1, -1 + i, dims.W / 2, H - 0.1, -1 + i);
+      // coiled rope (accent)
+      ring(ac, -1.4, 0.5, 0.3, 0.6);
+      ring(ac, -1.4, 0.5, 0.22, 0.7);
+      return [makeLines(a, palette.primary, 1), makeLines(ac, palette.accent, 1)];
+    },
+  },
+  "GAS-ROOM": {
+    note: "Reeking of coal gas — bring no flame here. Vapours drift and curl.",
+    build: ({ dims, palette }) => {
+      const out: THREE.Object3D[] = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      const base: Seg = [];
+      // a few rocks
+      for (let i = 0; i < 4; i++) diamond(base, -hx + 1 + i * 1.5, 0.2, hz - 1.5, 0.2);
+      out.push(makeLines(base, palette.primary, 1));
+      for (let i = 0; i < 4; i++) {
+        const g: Seg = [];
+        ring(g, 0, 0, 0.4 + i * 0.1, 0);
+        const m = makeLines(g, palette.accent, 0.5);
+        m.position.set(-hx + 1.5 + i * 1.6, 1.0 + (i % 2) * 0.5, 0);
+        m.rotation.x = Math.PI / 2;
+        m.userData.kind = "gas";
+        m.userData.phase = i;
+        out.push(m);
+      }
+      return out;
+    },
+    animate: (objs, t) => {
+      for (const o of objs as any[]) {
+        if (o.userData.kind !== "gas") continue;
+        o.position.y = 1.0 + Math.sin(t * 1.2 + o.userData.phase) * 0.5;
+        o.material.transparent = true;
+        o.material.opacity = 0.3 + 0.3 * Math.abs(Math.sin(t * 1.5 + o.userData.phase));
+      }
     },
   },
 };

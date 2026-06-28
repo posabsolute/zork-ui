@@ -89,6 +89,7 @@ export class Viewport {
     this.camera.rotation.y = this.targetYaw + sway;
     this.camera.position.y = 1.6 + Math.sin(this.bobT * 1.4) * 0.02;
 
+    this.current?.animate?.(this.bobT);
     this.composer.render();
   };
 }
