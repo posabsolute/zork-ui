@@ -9,6 +9,7 @@
 import { type Seg, line, rectXY, rectXZ, boxEdges, diamond, zigzag, makeLines } from "./lineKit.ts";
 import type { Room } from "../engine/roomState.ts";
 import { type Palette, FIRE_COLOR, WATER_COLOR } from "../config/regions.ts";
+import { tagMotion, type MotionKind } from "./motion.ts";
 import * as THREE from "three";
 
 export interface Dims {
@@ -23,9 +24,11 @@ type RNG = () => number;
 export interface DecorBuf {
   primary: Seg; // structure / props
   detail: Seg; // quiet texture
-  accent: Seg; // focal features
-  fire: Seg; // flames, light
-  water: Seg; // water
+  accent: Seg; // focal features (static)
+  fire: Seg; // flames, light (motion: flame)
+  water: Seg; // water (motion: water)
+  twinkle: Seg; // stars / distant lights (motion: twinkle)
+  glow: Seg; // a focal feature that breathes (motion: glow)
 }
 
 export function decorateRoom(
@@ -34,7 +37,9 @@ export function decorateRoom(
   dims: Dims,
   rng: RNG
 ): THREE.Object3D[] {
-  const buf: DecorBuf = { primary: [], detail: [], accent: [], fire: [], water: [] };
+  const buf: DecorBuf = {
+    primary: [], detail: [], accent: [], fire: [], water: [], twinkle: [], glow: [],
+  };
 
   // Universal: a base trim line around the walls and a couple of ceiling beams.
   wallTrim(buf.detail, dims);
@@ -44,11 +49,20 @@ export function decorateRoom(
   decorator(buf, dims, rng);
 
   const out: THREE.Object3D[] = [];
-  if (buf.primary.length) out.push(makeLines(buf.primary, palette.primary, 1));
-  if (buf.accent.length) out.push(makeLines(buf.accent, palette.accent, 1));
-  if (buf.detail.length) out.push(makeLines(buf.detail, palette.detail, 0.75));
-  if (buf.fire.length) out.push(makeLines(buf.fire, FIRE_COLOR, 1));
-  if (buf.water.length) out.push(makeLines(buf.water, WATER_COLOR, 1));
+  const add = (seg: Seg, color: number, op: number, motion?: MotionKind) => {
+    if (!seg.length) return;
+    const o = makeLines(seg, color, op);
+    if (motion) tagMotion(o, motion, rng() * 6.28);
+    out.push(o);
+  };
+  add(buf.primary, palette.primary, 1);
+  add(buf.accent, palette.accent, 1);
+  add(buf.detail, palette.detail, 0.75);
+  // Moving elements (design rule: 1–3 per room).
+  add(buf.fire, FIRE_COLOR, 1, "flame");
+  add(buf.water, WATER_COLOR, 1, "water");
+  add(buf.twinkle, palette.accent, 1, "twinkle");
+  add(buf.glow, palette.accent, 1, "glow");
   return out;
 }
 
@@ -88,14 +102,14 @@ function ceilingBeams(d: Seg, dim: Dims, rng: RNG) {
 // Forest --------------------------------------------------------------------
 function forest(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz, H } = half(dim);
-  const { primary: b, detail: d, accent: ac } = buf;
-  // A few stars overhead (accent = warm pinpoints against the green).
+  const { primary: b, detail: d, accent: ac, twinkle } = buf;
+  // A few stars overhead — they twinkle (moving element #1).
   for (let i = 0; i < 9; i++) {
     const x = -hx + rng() * dim.W;
     const z = -hz + rng() * dim.D;
     const s = 0.06;
-    line(ac, x - s, H - 0.1, z, x + s, H - 0.1, z);
-    line(ac, x, H - 0.1, z - s, x, H - 0.1, z + s);
+    line(twinkle, x - s, H - 0.1, z, x + s, H - 0.1, z);
+    line(twinkle, x, H - 0.1, z - s, x, H - 0.1, z + s);
   }
   // Trees: green trunks, warm canopies.
   const count = 4 + Math.floor(rng() * 3);
@@ -167,7 +181,7 @@ function house(buf: DecorBuf, dim: Dims, rng: RNG) {
 // Cave / cellar -------------------------------------------------------------
 function cave(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz, H } = half(dim);
-  const { primary: b, detail: d, accent: ac } = buf;
+  const { primary: b, detail: d, glow } = buf;
   stalactites(b, dim, rng, 4);
   for (let i = 0; i < 3; i++) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D;
@@ -178,8 +192,8 @@ function cave(buf: DecorBuf, dim: Dims, rng: RNG) {
   timberPost(b, hx - 0.6, hz - 0.6, H);
   rubble(d, dim, rng, 4);
   stoneAccents(d, dim, rng);
-  // A glinting mineral vein (accent) on a wall.
-  zigzag(ac, -hx + 0.06, 0.6, -hz + rng() * dim.D, 1.8, 0.0, 5);
+  // A glinting mineral vein on a wall — it breathes (moving element).
+  zigzag(glow, -hx + 0.06, 0.6, -hz + rng() * dim.D, 1.8, 0.0, 5);
 }
 
 function dungeon(buf: DecorBuf, dim: Dims, rng: RNG) {
@@ -198,7 +212,7 @@ function dungeon(buf: DecorBuf, dim: Dims, rng: RNG) {
 
 function maze(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz } = half(dim);
-  const { primary: b, detail: d } = buf;
+  const { primary: b, detail: d, glow } = buf;
   for (let i = 0; i < 3; i++) {
     const wall = Math.floor(rng() * 4);
     const ox = (rng() - 0.5) * dim.W * 0.5;
@@ -211,21 +225,23 @@ function maze(buf: DecorBuf, dim: Dims, rng: RNG) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D;
     line(b, x, 0, z, x + (rng() - 0.5) * 1.2, 1.0 + rng(), z + (rng() - 0.5) * 1.2);
   }
+  // A faint will-o'-the-wisp glimmer — unsettling, the maze's one moving element.
+  diamond(glow, (rng() - 0.5) * dim.W * 0.5, 1.2, (rng() - 0.5) * dim.D * 0.5, 0.15);
 }
 
 function temple(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz } = half(dim);
   const H = dim.H;
-  const { primary: b, detail: d, accent: ac } = buf;
+  const { primary: b, detail: d, glow } = buf;
   const cols = 3;
   for (let i = 0; i < cols; i++) {
     const z = -hz + (dim.D * (i + 1)) / (cols + 1);
     column(b, -hx + 0.8, z, H);
     column(b, hx - 0.8, z, H);
   }
-  // Altar + arch are the focal points (accent).
-  boxEdges(ac, 0, 0.5, -hz + 1.4, 1.4, 1.0, 0.9);
-  arch(ac, 0, 1.0, -hz + 0.04, 1.4, H - 1.0);
+  // Altar + arch are the focal points — they glow softly (moving element).
+  boxEdges(glow, 0, 0.5, -hz + 1.4, 1.4, 1.0, 0.9);
+  arch(glow, 0, 1.0, -hz + 0.04, 1.4, H - 1.0);
   for (let i = 0; i < 3; i++) rectXZ(d, -1.4, -hz + 2.0 + i * 0.4, 1.4, -hz + 2.4 + i * 0.4, 0.1 + i * 0.15);
 }
 
@@ -269,7 +285,7 @@ function hades(buf: DecorBuf, dim: Dims, rng: RNG) {
 function mine(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz } = half(dim);
   const H = dim.H;
-  const { primary: b, detail: d, accent: ac } = buf;
+  const { primary: b, detail: d, accent: ac, fire } = buf;
   for (let i = 0; i < 2; i++) {
     const z = -hz + (dim.D * (i + 1)) / 3;
     line(b, -hx + 0.5, 0, z, -hx + 0.5, H - 0.3, z);
@@ -281,6 +297,9 @@ function mine(buf: DecorBuf, dim: Dims, rng: RNG) {
   line(ac, 0.4, 0.05, -hz, 0.4, 0.05, hz);
   for (let z = -hz + 0.4; z < hz; z += 0.8) line(d, -0.5, 0.04, z, 0.5, 0.04, z);
   stoneAccents(d, dim, rng);
+  // A miner's lamp on a timber — its flame flickers (moving element).
+  line(b, hx - 0.5, 1.6, 0, hx - 0.8, 1.6, 0);
+  zigzag(fire, hx - 0.8, 1.6, 0, 2.0, 0.08, 3);
 }
 
 // Shared props --------------------------------------------------------------

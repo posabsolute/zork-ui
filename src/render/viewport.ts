@@ -14,6 +14,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { buildRoom, type BuiltRoom } from "./roomBuilder.ts";
 import { ReactiveGrid } from "./reactiveGrid.ts";
 import { ParticleField } from "./particles.ts";
+import { animateGroup } from "./motion.ts";
 import { getPalette, scaleColor } from "../config/regions.ts";
 import type { Room } from "../engine/roomState.ts";
 
@@ -129,7 +130,8 @@ export class Viewport {
 
     this.grid.update(this.bobT);
     this.particles.update(this.bobT);
-    this.current?.animate?.(this.bobT);
+    if (this.current) animateGroup(this.current.group, this.bobT); // tagged decor motion
+    this.current?.animate?.(this.bobT); // hero bespoke motion
     this.composer.render();
   };
 }

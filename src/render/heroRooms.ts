@@ -12,6 +12,13 @@ import {
   type Seg, line, rectXZ, rectXY, boxEdges, diamond, zigzag, makeLines,
 } from "./lineKit.ts";
 import { type Palette, scaleColor, FIRE_COLOR, WATER_COLOR } from "../config/regions.ts";
+import { tagMotion, type MotionKind } from "./motion.ts";
+
+/** Tag a built object so the generic animator gives it life. */
+function moving(o: THREE.Object3D, kind: MotionKind = "glow"): THREE.Object3D {
+  tagMotion(o, kind, 0);
+  return o;
+}
 
 export interface HeroCtx {
   dims: { W: number; H: number; D: number };
@@ -219,7 +226,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
       // Beamed ceiling.
       for (let i = 1; i <= 3; i++) line(structure, -hx, H - 0.05, -hz + (dims.D * i) / 4, hx, H - 0.05, -hz + (dims.D * i) / 4);
       return [
-        makeLines(focal, palette.accent, 1),
+        moving(makeLines(focal, palette.accent, 1)), // trophy case + trap door breathe
         makeLines(structure, palette.primary, 1),
         makeLines(dim, scaleColor(palette.primary, 0.5), 0.7),
       ];
@@ -245,7 +252,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
       for (let i = 1; i < 6; i++) line(dim, -hx, 0.01, -dims.D / 2 + (dims.D * i) / 6, hx, 0.01, -dims.D / 2 + (dims.D * i) / 6);
       return [
         makeLines(a, palette.primary, 1),
-        makeLines(focal, palette.accent, 1),
+        moving(makeLines(focal, palette.accent, 1)), // window ajar glows
         makeLines(dim, scaleColor(palette.primary, 0.5), 0.7),
       ];
     },
@@ -263,7 +270,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
       // Trap door open in the ceiling, light spilling through (accent).
       rectXZ(ac, -0.8, -0.8, 0.8, 0.8, H - 0.02);
       for (let i = -2; i <= 2; i++) line(ac, (i * 0.8) / 2, H - 0.02, -0.8, (i * 0.4), 1.4, 0.0);
-      return [makeLines(a, palette.primary, 1), makeLines(ac, palette.accent, 0.8)];
+      return [makeLines(a, palette.primary, 1), moving(makeLines(ac, palette.accent, 0.8))];
     },
   },
   "TROLL-ROOM": {
@@ -278,7 +285,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
       for (const [x, z] of [[-1.4, 0.8], [0.9, 1.2], [-0.3, -1.4]]) diamond(blood, x, 0.02, z, 0.2);
       return [
         makeLines(body, palette.primary, 1),
-        makeLines(axe, palette.accent, 1),
+        moving(makeLines(axe, palette.accent, 1)), // the bloody axe glints
         makeLines(blood, FIRE_COLOR, 0.7),
       ];
     },
@@ -373,7 +380,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
       line(gold, -0.5, 0.8, -1.1, 0.5, 0.8, -1.1);
       diamond(gold, 0, 0.85, -0.7, 0.25); // mask
       rectXY(a, -0.4, 0.85, 0.4, 1.4, -1.1);
-      return [makeLines(a, palette.primary, 1), makeLines(gold, palette.accent, 1)];
+      return [makeLines(a, palette.primary, 1), moving(makeLines(gold, palette.accent, 1))];
     },
   },
   "SOUTH-TEMPLE": {
@@ -420,7 +427,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
       // book on a stand
       boxEdges(a, 0, 0.9, 1.2, 0.7, 0.1, 0.5);
       line(a, 0, 0, 1.2, 0, 0.9, 1.2);
-      return [makeLines(a, palette.primary, 1), makeLines(ac, palette.accent, 1)];
+      return [makeLines(a, palette.primary, 1), moving(makeLines(ac, palette.accent, 1))]; // bell glows
     },
   },
   "ENTRANCE-TO-HADES": {
@@ -461,7 +468,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
         figure(ghosts, x, z, 0.9);
       diamond(skull, 0, 1.0, 0, 0.35);
       line(skull, -0.14, 0.85, 0, 0.14, 0.85, 0);
-      return [makeLines(ghosts, palette.detail, 0.6), makeLines(skull, palette.accent, 1)];
+      return [makeLines(ghosts, palette.detail, 0.6), moving(makeLines(skull, palette.accent, 1))];
     },
   },
   "CYCLOPS-ROOM": {
@@ -495,7 +502,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
         diamond(gems, Math.cos(ang) * 1.6, 0.15, Math.sin(ang) * 1.6 + 0.5, 0.15);
       }
       figure(a, 1.8, 1.2, 1.0); // the thief lurking
-      return [makeLines(a, palette.primary, 1), makeLines(gems, palette.accent, 1)];
+      return [makeLines(a, palette.primary, 1), moving(makeLines(gems, palette.accent, 1))];
     },
   },
   "DAM-ROOM": {
@@ -514,7 +521,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
       boxEdges(a, hx - 1.2, 1.0, 0, 0.1, 1.0, 1.4);
       diamond(ac, hx - 1.2, 1.2, 0.3, 0.12); // glowing bubble
       line(ac, hx - 1.2, 0.8, -0.3, hx - 1.2, 1.0, -0.3); // bolt
-      return [makeLines(a, palette.primary, 1), makeLines(ac, palette.accent, 1)];
+      return [makeLines(a, palette.primary, 1), moving(makeLines(ac, palette.accent, 1))]; // bubble/bolt pulse
     },
   },
   "ON-RAINBOW": {
