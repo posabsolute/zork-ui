@@ -1,17 +1,17 @@
 /*
- * titleScene.ts — the title-screen background, drawn from the heart of Zork.
+ * titleScene.ts — the heart of Zork, done properly.
  *
- * The Great Underground Empire is about the dark. Your brass lantern is the most
- * precious thing you own because light is survival: out in the black, grues lurk
- * — and they fear light. So the title is a lone, flickering lantern glow in an
- * endless cavern, ringed by pairs of pale grue-eyes that creep in from the dark
- * and shrink back whenever the flame flares. Light versus the dark — that is Zork.
+ * A brass lantern hangs swaying in a pitch-black cavern, its flame guttering.
+ * Its pool of light catches the rough stone floor; beyond it, pure dark. Out
+ * there, grue-eyes surface as pairs of cold pinpricks — they fade up from the
+ * black and edge inward when the flame dips, and shrink away the moment it flares.
+ * Light versus the dark, the lantern as lifeline: the Great Underground Empire.
  */
 export function startTitleScene(canvas: HTMLCanvasElement): () => void {
   const ctx = canvas.getContext("2d")!;
   let raf = 0;
-  let t = 0;
   let running = true;
+  let t = 0;
 
   const resize = () => {
     canvas.width = canvas.clientWidth || window.innerWidth;
@@ -20,111 +20,157 @@ export function startTitleScene(canvas: HTMLCanvasElement): () => void {
   resize();
   window.addEventListener("resize", resize);
 
-  // Grue eyes lurking in the dark — angle, radius (fraction), blink + drift seeds.
-  const EYES = 46;
-  const eyes = Array.from({ length: EYES }, (_, i) => ({
-    a: (i / EYES) * Math.PI * 2 + ((i * 41) % 17) / 17,
-    d: 0.42 + ((i * 53) % 100) / 100 * 0.7, // 0.42..1.12 of the radius
-    blink: ((i * 29) % 100) / 100 * Math.PI * 2,
-    blinkRate: 1.5 + ((i * 13) % 100) / 100, // seconds-ish
-    drift: 0.1 + ((i * 7) % 100) / 100 * 0.25,
-    sep: 0.012 + ((i * 19) % 100) / 100 * 0.01, // eye separation
-    hue: 70 + ((i * 23) % 30), // sickly yellow-green
-  }));
+  type Eye = { a: number; d: number; life: number; dur: number; sep: number; blink: number };
+  const eyes: Eye[] = [];
+  function spawnEye(flame: number): Eye {
+    return {
+      a: Math.random() * Math.PI * 2,
+      d: 0.32 + Math.random() * 0.42 + (1 - flame) * 0.06, // closer when dark
+      life: 0,
+      dur: 3 + Math.random() * 4,
+      sep: 5 + Math.random() * 4,
+      blink: Math.random() * 100,
+    };
+  }
+  for (let i = 0; i < 11; i++) eyes.push(spawnEye(0.7));
 
-  // Warm embers rising off the lantern.
-  const embers = Array.from({ length: 26 }, (_, i) => ({
-    x: ((i * 37) % 100) / 100,
-    y: ((i * 61) % 100) / 100,
-    s: 0.2 + ((i * 17) % 100) / 100 * 0.5,
-  }));
+  function drawLantern(cx: number, cy: number, scale: number, flame: number, sway: number) {
+    ctx.save();
+    ctx.translate(cx, cy - scale * 4.2);
+    ctx.rotate(sway);
+    ctx.translate(0, scale * 4.2);
+    const amber = `rgba(255, 200, 120, ${0.7 + flame * 0.3})`;
+    ctx.strokeStyle = amber;
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = "#ffcf8a";
+    ctx.shadowBlur = 10;
+    // chain
+    ctx.beginPath();
+    ctx.moveTo(0, -scale * 4.2);
+    ctx.lineTo(0, -scale * 1.5);
+    ctx.stroke();
+    // top ring + cap
+    ctx.beginPath();
+    ctx.arc(0, -scale * 1.6, scale * 0.25, 0, Math.PI * 2);
+    ctx.stroke();
+    // cage body (tapered)
+    ctx.beginPath();
+    ctx.moveTo(-scale * 0.7, -scale * 1.2);
+    ctx.lineTo(scale * 0.7, -scale * 1.2);
+    ctx.lineTo(scale * 0.95, scale * 1.1);
+    ctx.lineTo(-scale * 0.95, scale * 1.1);
+    ctx.closePath();
+    ctx.stroke();
+    // bars
+    ctx.beginPath();
+    ctx.moveTo(-scale * 0.3, -scale * 1.2); ctx.lineTo(-scale * 0.45, scale * 1.1);
+    ctx.moveTo(scale * 0.3, -scale * 1.2); ctx.lineTo(scale * 0.45, scale * 1.1);
+    ctx.moveTo(-scale * 0.82, scale * 0.1); ctx.lineTo(scale * 0.82, scale * 0.1);
+    ctx.stroke();
+    // base
+    ctx.beginPath();
+    ctx.moveTo(-scale * 1.05, scale * 1.1); ctx.lineTo(scale * 1.05, scale * 1.1);
+    ctx.stroke();
+    // flame inside
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = `rgba(255, 240, 200, ${flame})`;
+    ctx.beginPath();
+    ctx.moveTo(0, scale * 0.7);
+    ctx.quadraticCurveTo(scale * 0.32, scale * 0.1, 0, -scale * (0.5 + flame * 0.4));
+    ctx.quadraticCurveTo(-scale * 0.32, scale * 0.1, 0, scale * 0.7);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return [cx, cy] as const; // flame world pos (approx; sway is small)
+  }
 
   function draw() {
     if (!running) return;
     raf = requestAnimationFrame(draw);
     t += 0.016;
-
     const w = canvas.width, h = canvas.height;
-    const cx = w / 2, cy = h * 0.46;
     const minDim = Math.min(w, h);
+    const cx = w / 2;
+    const cy = h * 0.56; // lantern hangs below the title
+    const scale = minDim * 0.05;
 
-    // Deep cavern black with a slow trail.
+    // cavern black with a soft trail
     ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "rgba(2, 2, 4, 0.34)";
+    ctx.fillStyle = "rgba(2, 2, 4, 0.32)";
     ctx.fillRect(0, 0, w, h);
 
-    // Lantern flame flicker (0..1).
-    const flame =
-      0.72 +
-      Math.sin(t * 9) * 0.06 +
-      Math.sin(t * 23.3) * 0.04 +
-      Math.sin(t * 3.1) * 0.05;
-    const lanternR = minDim * (0.16 + flame * 0.06);
-    const darkEdge = lanternR * 1.18; // grues won't enter the lit circle
+    // flame flicker
+    const flame = 0.7 + Math.sin(t * 9) * 0.06 + Math.sin(t * 21.7) * 0.05 + Math.sin(t * 2.7) * 0.06;
+    const lightR = minDim * (0.2 + flame * 0.07);
+    const sway = Math.sin(t * 1.1) * 0.05;
+    const fx = cx + Math.sin(sway) * scale * 4.2;
+    const fy = cy;
 
     ctx.globalCompositeOperation = "lighter";
 
-    // The lantern's pool of warm light.
-    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, lanternR * 2.4);
-    glow.addColorStop(0, `rgba(255, 226, 160, ${0.55 * flame})`);
-    glow.addColorStop(0.25, `rgba(255, 180, 90, ${0.30 * flame})`);
-    glow.addColorStop(0.6, "rgba(120, 70, 30, 0.06)");
+    // the lantern's pool of light
+    const glow = ctx.createRadialGradient(fx, fy, 0, fx, fy, lightR * 2.2);
+    glow.addColorStop(0, `rgba(255, 222, 160, ${0.42 * flame})`);
+    glow.addColorStop(0.3, `rgba(255, 170, 90, ${0.18 * flame})`);
+    glow.addColorStop(0.7, "rgba(110, 60, 25, 0.04)");
     glow.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
 
-    // The lantern flame core.
-    ctx.beginPath();
-    ctx.arc(cx, cy, 4 + flame * 3, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255, 240, 200, ${flame})`;
-    ctx.shadowColor = "#ffcf8a";
-    ctx.shadowBlur = 24;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // Rising embers.
-    for (const e of embers) {
-      const yy = (e.y - t * e.s * 0.05) % 1;
-      const py = cy + (yy < 0 ? yy + 1 : yy) * -minDim * 0.3 + minDim * 0.12;
-      const px = cx + Math.sin(t * e.s + e.x * 9) * 18 + (e.x - 0.5) * 40;
-      const op = (1 - Math.abs((yy < 0 ? yy + 1 : yy) - 0.3)) * 0.5 * flame;
+    // rough cavern floor revealed by the light (contour lines below the lantern)
+    ctx.strokeStyle = `rgba(255, 180, 110, ${0.22 * flame})`;
+    ctx.lineWidth = 1;
+    for (let k = 1; k <= 5; k++) {
+      const fyl = fy + scale * 1.4 + k * minDim * 0.045;
+      const reach = lightR * (1.1 - k * 0.12);
+      const op = Math.max(0, (1 - k / 6)) * 0.4 * flame;
+      ctx.strokeStyle = `rgba(255, 180, 110, ${op})`;
       ctx.beginPath();
-      ctx.arc(px, py, 1.2, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255, 200, 120, ${Math.max(0, op)})`;
-      ctx.fill();
+      let first = true;
+      for (let x = -reach; x <= reach; x += reach / 6) {
+        const jag = Math.sin(x * 0.06 + k * 1.7) * (4 + k);
+        const px = fx + x, py = fyl + jag;
+        if (first) { ctx.moveTo(px, py); first = false; } else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
     }
 
-    // Grue eyes, lurking just beyond the light.
-    for (const eye of eyes) {
-      const a = eye.a + Math.sin(t * eye.drift) * 0.25;
-      // breathe in toward the light then shrink back, but never enter it
-      const breathe = Math.sin(t * eye.drift * 1.7 + eye.blink) * 0.06;
-      let d = (eye.d + breathe) * minDim * 0.62;
-      const near = Math.max(0, 1 - (d - darkEdge) / (minDim * 0.5));
-      // brighter when the flame is low (they grow bold in the dark)
-      let openness = Math.sin(t * eye.blinkRate + eye.blink);
-      openness = openness > -0.35 ? 1 : 0; // mostly open, an occasional blink
-      const inDark = d > darkEdge ? 1 : 0;
-      const op = inDark * openness * (0.4 + near * 0.6) * (1.15 - flame);
+    // grue eyes out in the dark
+    for (let i = 0; i < eyes.length; i++) {
+      const e = eyes[i];
+      e.life += 0.016 / e.dur;
+      if (e.life >= 1) { eyes[i] = spawnEye(flame); continue; }
+      const env = Math.sin(e.life * Math.PI); // fade in then out
+      // blink: brief closes
+      const open = Math.sin(t * 3 + e.blink) > -0.4 ? 1 : 0.05;
+      const d = e.d * minDim;
+      // only out in the dark, brighter as the flame dips, dimmer near the light
+      const beyond = Math.max(0, (d - lightR * 1.1) / (minDim * 0.4));
+      const op = env * open * Math.min(1, beyond + 0.15) * (1.25 - flame) * 0.95;
       if (op <= 0.02) continue;
-
-      const ex = cx + Math.cos(a) * d;
-      const ey = cy + Math.sin(a) * d;
-      const sep = eye.sep * minDim;
-      const tilt = a + Math.PI / 2;
-      ctx.shadowColor = `hsl(${eye.hue}, 100%, 60%)`;
-      ctx.shadowBlur = 8;
+      const ex = fx + Math.cos(e.a) * d;
+      const ey = fy + Math.sin(e.a) * d * 0.8;
+      ctx.fillStyle = `rgba(190, 255, 130, ${op})`;
+      ctx.shadowColor = "rgba(150, 255, 90, 0.9)";
+      ctx.shadowBlur = 7;
       for (const s of [-1, 1]) {
-        const px = ex + Math.cos(tilt) * sep * s;
-        const py = ey + Math.sin(tilt) * sep * s;
         ctx.beginPath();
-        ctx.ellipse(px, py, sep * 0.9, sep * 0.45, tilt, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${eye.hue}, 100%, 70%, ${op})`;
+        ctx.arc(ex + (Math.cos(e.a + Math.PI / 2) * e.sep * s), ey + (Math.sin(e.a + Math.PI / 2) * e.sep * s), 1.6, 0, Math.PI * 2);
         ctx.fill();
       }
     }
     ctx.shadowBlur = 0;
+
+    // the lantern itself
+    drawLantern(cx, cy, scale, flame, sway);
+
+    // vignette to crush the edges to true black
     ctx.globalCompositeOperation = "source-over";
+    const vg = ctx.createRadialGradient(fx, fy, lightR * 0.5, fx, fy, Math.max(w, h) * 0.7);
+    vg.addColorStop(0, "rgba(2,2,4,0)");
+    vg.addColorStop(1, "rgba(2,2,4,0.92)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, w, h);
   }
   draw();
 
