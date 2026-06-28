@@ -75,3 +75,50 @@ export const VECTOR_COLORS: Record<string, number> = {
 export function vectorColor(region: string): number {
   return VECTOR_COLORS[region] ?? VECTOR_COLORS.dungeon;
 }
+
+/*
+ * Role-based palette. A great designer makes colour mean something: the base hue
+ * is the architecture, the accent is reserved for exits and focal features (so
+ * doorways read instantly), detail is a quiet shade for texture. Objects and
+ * fire/water use shared semantic colours across every region so the player
+ * learns the language: warm-white = a thing you can use, orange = fire/light,
+ * cyan = water.
+ */
+export interface Palette {
+  primary: number; // structure
+  accent: number; // exits + focal features
+  detail: number; // quiet texture
+}
+
+const ACCENTS: Record<string, number> = {
+  forest: 0xffd24a, // warm sun against green
+  house: 0x6fe0ff, // cool against amber
+  cellar: 0x6fd0ff,
+  dungeon: 0xffb24a,
+  maze: 0x7dffa6,
+  temple: 0x8fd6ff,
+  river: 0x9dffc0,
+  hades: 0xffc24a,
+  mine: 0x7fe0ff,
+};
+
+export const OBJECT_HIGHLIGHT = 0xfff0d0; // warm white — "a thing you can use"
+export const FIRE_COLOR = 0xff7a3a; // flames, sconces, lava cracks
+export const WATER_COLOR = 0x5cf2ff; // water surfaces
+
+/** Scale an RGB hex colour's brightness by `f`. */
+export function scaleColor(hex: number, f: number): number {
+  const r = Math.min(255, Math.round(((hex >> 16) & 0xff) * f));
+  const g = Math.min(255, Math.round(((hex >> 8) & 0xff) * f));
+  const b = Math.min(255, Math.round((hex & 0xff) * f));
+  return (r << 16) | (g << 8) | b;
+}
+
+export function getPalette(region: string): Palette {
+  const primary = vectorColor(region);
+  return {
+    primary,
+    accent: ACCENTS[region] ?? 0xffd24a,
+    detail: scaleColor(primary, 0.5),
+  };
+}

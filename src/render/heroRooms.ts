@@ -9,10 +9,11 @@
  */
 import * as THREE from "three";
 import { type Seg, line, rectXZ, makeLines } from "./lineKit.ts";
+import { type Palette, scaleColor } from "../config/regions.ts";
 
 export interface HeroCtx {
   dims: { W: number; H: number; D: number };
-  color: number;
+  palette: Palette;
   rng: () => number;
 }
 
@@ -102,80 +103,88 @@ function northWall(dim: { D: number }): Map2 {
 export const HERO_ROOMS: Record<string, HeroSpec> = {
   "WEST-OF-HOUSE": {
     note: "Open field west of the white house; boarded front door faces you (house to the east).",
-    build: ({ dims, color, rng }) => {
+    build: ({ dims, palette, rng }) => {
       const env: Seg = [], house: Seg = [];
       openField(env, dims, rng);
       whiteHouse(house, eastWall(dims), { boardedDoor: true });
-      return [makeLines(env, color, 0.7), makeLines(house, color, 1)];
+      return [makeLines(env, palette.detail, 0.75), makeLines(house, palette.primary, 1)];
     },
   },
   "NORTH-OF-HOUSE": {
     note: "North side of the white house; barred windows (house to the south).",
-    build: ({ dims, color, rng }) => {
+    build: ({ dims, palette, rng }) => {
       const env: Seg = [], house: Seg = [];
       openField(env, dims, rng);
       whiteHouse(house, southWall(dims), {});
-      return [makeLines(env, color, 0.7), makeLines(house, color, 1)];
+      return [makeLines(env, palette.detail, 0.75), makeLines(house, palette.primary, 1)];
     },
   },
   "SOUTH-OF-HOUSE": {
     note: "South side of the white house; barred windows (house to the north).",
-    build: ({ dims, color, rng }) => {
+    build: ({ dims, palette, rng }) => {
       const env: Seg = [], house: Seg = [];
       openField(env, dims, rng);
       whiteHouse(house, northWall(dims), {});
-      return [makeLines(env, color, 0.7), makeLines(house, color, 1)];
+      return [makeLines(env, palette.detail, 0.75), makeLines(house, palette.primary, 1)];
     },
   },
   "EAST-OF-HOUSE": {
     note: "Behind the white house; a small window is ajar (house to the west).",
-    build: ({ dims, color, rng }) => {
+    build: ({ dims, palette, rng }) => {
       const env: Seg = [], house: Seg = [];
       openField(env, dims, rng);
       whiteHouse(house, westWall(dims), { openWindow: true });
-      return [makeLines(env, color, 0.7), makeLines(house, color, 1)];
+      return [makeLines(env, palette.detail, 0.75), makeLines(house, palette.primary, 1)];
     },
   },
   "LIVING-ROOM": {
     note: "Trophy case on the wall, oriental rug centre, trap door beneath it, lamp.",
-    build: ({ dims, color }) => {
-      const a: Seg = [], dim: Seg = [];
+    build: ({ dims, palette }) => {
+      const focal: Seg = [], structure: Seg = [], dim: Seg = [];
       const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
-      // Trophy case on the east wall.
+      // Trophy case on the east wall — the focal point (accent).
       const m = eastWall(dims);
-      rc(a, m, -1.0, 0.4, 1.0, 2.0);
-      ln(a, m, -1.0, 1.0, 1.0, 1.0);
-      ln(a, m, -1.0, 1.5, 1.0, 1.5);
+      rc(focal, m, -1.0, 0.4, 1.0, 2.0);
+      ln(focal, m, -1.0, 1.0, 1.0, 1.0);
+      ln(focal, m, -1.0, 1.5, 1.0, 1.5);
       // Oriental rug.
       rectXZ(dim, -1.5, -1.0, 1.5, 1.0, 0.015);
       for (let i = -3; i <= 3; i++) line(dim, (i * 1.5) / 4, 0.015, -1.0, (i * 1.5) / 4, 0.015, 1.0);
-      // Trap door under the rug.
-      rectXZ(a, -0.5, -0.4, 0.5, 0.4, 0.02);
-      line(a, -0.5, 0.02, -0.4, 0.5, 0.02, 0.4);
+      // Trap door under the rug — also focal (accent).
+      rectXZ(focal, -0.5, -0.4, 0.5, 0.4, 0.02);
+      line(focal, -0.5, 0.02, -0.4, 0.5, 0.02, 0.4);
       // Beamed ceiling.
-      for (let i = 1; i <= 3; i++) line(dim, -hx, H - 0.05, -hz + (dims.D * i) / 4, hx, H - 0.05, -hz + (dims.D * i) / 4);
-      return [makeLines(a, color, 1), makeLines(dim, new THREE.Color(color).multiplyScalar(0.5).getHex(), 0.7)];
+      for (let i = 1; i <= 3; i++) line(structure, -hx, H - 0.05, -hz + (dims.D * i) / 4, hx, H - 0.05, -hz + (dims.D * i) / 4);
+      return [
+        makeLines(focal, palette.accent, 1),
+        makeLines(structure, palette.primary, 1),
+        makeLines(dim, scaleColor(palette.primary, 0.5), 0.7),
+      ];
     },
   },
   "KITCHEN": {
     note: "Table with a sack and bottle, chimney, window to the east, stairs up.",
-    build: ({ dims, color }) => {
-      const a: Seg = [], dim: Seg = [];
+    build: ({ dims, palette }) => {
+      const a: Seg = [], focal: Seg = [], dim: Seg = [];
       const hx = dims.W / 2, H = dims.H;
       // Table.
       rectXZ(a, -0.9, -0.5, 0.9, 0.5, 0.95);
       for (const [lx, lz] of [[-0.8, -0.4], [0.8, -0.4], [0.8, 0.4], [-0.8, 0.4]]) line(a, lx, 0, lz, lx, 0.95, lz);
-      // Window on the east wall (ajar to "Behind House").
+      // Window on the east wall (ajar to "Behind House") — focal accent.
       const m = eastWall(dims);
-      rc(a, m, -0.6, 1.3, 0.6, 2.2);
-      ln(a, m, 0, 1.3, 0, 2.2);
+      rc(focal, m, -0.6, 1.3, 0.6, 2.2);
+      ln(focal, m, 0, 1.3, 0, 2.2);
       // Chimney column.
       line(a, -hx + 0.4, 0, 0, -hx + 0.4, H, 0);
       line(a, -hx + 1.0, 0, 0, -hx + 1.0, H, 0);
       line(a, -hx + 0.4, H, 0, -hx + 1.0, H, 0);
       // Floor boards.
       for (let i = 1; i < 6; i++) line(dim, -hx, 0.01, -dims.D / 2 + (dims.D * i) / 6, hx, 0.01, -dims.D / 2 + (dims.D * i) / 6);
-      return [makeLines(a, color, 1), makeLines(dim, new THREE.Color(color).multiplyScalar(0.5).getHex(), 0.7)];
+      return [
+        makeLines(a, palette.primary, 1),
+        makeLines(focal, palette.accent, 1),
+        makeLines(dim, scaleColor(palette.primary, 0.5), 0.7),
+      ];
     },
   },
 };

@@ -8,7 +8,7 @@
  */
 import * as THREE from "three";
 import type { Room } from "../engine/roomState.ts";
-import { vectorColor } from "../config/regions.ts";
+import { getPalette, OBJECT_HIGHLIGHT } from "../config/regions.ts";
 import {
   type Seg, line, rectXZ, makeLines, makeLabel,
   hashStr, mulberry32,
@@ -32,8 +32,8 @@ export interface BuiltRoom {
 export function buildRoom(room: Room): BuiltRoom {
   const group = new THREE.Group();
   const hero = getHero(room.id);
-  const color = hero?.palette ?? vectorColor(room.region);
-  const dimColor = new THREE.Color(color).multiplyScalar(0.45).getHex();
+  const palette = getPalette(room.region);
+  if (hero?.palette) palette.primary = hero.palette;
   const rng = mulberry32(hashStr(room.id));
 
   const W = 7 + ((room.value ?? 5) % 5);
@@ -95,20 +95,21 @@ export function buildRoom(room: Room): BuiltRoom {
     }
   }
 
-  group.add(makeLines(seg, color, 1));
-  group.add(makeLines(grid, dimColor, 0.55));
-  group.add(makeLines(portal, color, 1));
+  group.add(makeLines(seg, palette.primary, 1));
+  group.add(makeLines(grid, palette.detail, 0.55));
+  group.add(makeLines(portal, palette.accent, 1)); // exits glow in the accent
 
   // Hero rooms override procedural atmosphere with hand-authored geometry.
   if (hero) {
-    for (const o of hero.build({ dims: { W, H, D }, color, rng })) group.add(o);
+    for (const o of hero.build({ dims: { W, H, D }, palette, rng })) group.add(o);
   } else {
-    for (const o of decorateRoom(room, color, { W, H, D }, rng)) group.add(o);
+    for (const o of decorateRoom(room, palette, { W, H, D }, rng)) group.add(o);
   }
 
   // Object icons, placed where they belong (floor items on the floor, fixtures
-  // on walls) rather than floating in a ring.
-  placeObjects(group, room, color, { W, H, D }, doorDirs);
+  // on walls) rather than floating in a ring. Always the highlight colour so
+  // interactables read the same in every room.
+  placeObjects(group, room, OBJECT_HIGHLIGHT, { W, H, D }, doorDirs);
 
   const entryFacing = (dir?: string) => {
     const back = oppositeCardinal(dir);

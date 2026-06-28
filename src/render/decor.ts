@@ -6,11 +6,10 @@
  * Each region gets its own props (trees, furniture, columns, stalactites, water,
  * flame...) placed by a per-room seeded RNG so spaces vary yet stay stable.
  */
-import * as THREE from "three";
-import {
-  type Seg, line, rectXY, rectXZ, boxEdges, diamond, zigzag, makeLines,
-} from "./lineKit.ts";
+import { type Seg, line, rectXY, rectXZ, boxEdges, diamond, zigzag, makeLines } from "./lineKit.ts";
 import type { Room } from "../engine/roomState.ts";
+import { type Palette, FIRE_COLOR, WATER_COLOR } from "../config/regions.ts";
+import * as THREE from "three";
 
 export interface Dims {
   W: number;
@@ -20,31 +19,41 @@ export interface Dims {
 
 type RNG = () => number;
 
+/** Collectors passed to each decorator, one per semantic colour. */
+export interface DecorBuf {
+  primary: Seg; // structure / props
+  detail: Seg; // quiet texture
+  accent: Seg; // focal features
+  fire: Seg; // flames, light
+  water: Seg; // water
+}
+
 export function decorateRoom(
   room: Room,
-  color: number,
+  palette: Palette,
   dims: Dims,
   rng: RNG
 ): THREE.Object3D[] {
-  const bright: Seg = [];
-  const dim: Seg = [];
-  const dimColor = new THREE.Color(color).multiplyScalar(0.5).getHex();
+  const buf: DecorBuf = { primary: [], detail: [], accent: [], fire: [], water: [] };
 
   // Universal: a base trim line around the walls and a couple of ceiling beams.
-  wallTrim(dim, dims);
-  ceilingBeams(dim, dims, rng);
+  wallTrim(buf.detail, dims);
+  ceilingBeams(buf.detail, dims, rng);
 
   const decorator = DECORATORS[room.region] ?? DECORATORS.dungeon;
-  decorator(bright, dim, dims, rng);
+  decorator(buf, dims, rng);
 
   const out: THREE.Object3D[] = [];
-  if (bright.length) out.push(makeLines(bright, color, 1));
-  if (dim.length) out.push(makeLines(dim, dimColor, 0.7));
+  if (buf.primary.length) out.push(makeLines(buf.primary, palette.primary, 1));
+  if (buf.accent.length) out.push(makeLines(buf.accent, palette.accent, 1));
+  if (buf.detail.length) out.push(makeLines(buf.detail, palette.detail, 0.75));
+  if (buf.fire.length) out.push(makeLines(buf.fire, FIRE_COLOR, 1));
+  if (buf.water.length) out.push(makeLines(buf.water, WATER_COLOR, 1));
   return out;
 }
 
 // ---------------------------------------------------------------------------
-const DECORATORS: Record<string, (b: Seg, d: Seg, dim: Dims, rng: RNG) => void> = {
+const DECORATORS: Record<string, (buf: DecorBuf, dim: Dims, rng: RNG) => void> = {
   forest: forest,
   house: house,
   cellar: cave,
@@ -77,23 +86,24 @@ function ceilingBeams(d: Seg, dim: Dims, rng: RNG) {
 }
 
 // Forest --------------------------------------------------------------------
-function forest(b: Seg, d: Seg, dim: Dims, rng: RNG) {
+function forest(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz, H } = half(dim);
-  // Stars overhead.
+  const { primary: b, detail: d, accent: ac } = buf;
+  // Stars overhead (accent = warm pinpoints against the green).
   for (let i = 0; i < 22; i++) {
     const x = -hx + rng() * dim.W;
     const z = -hz + rng() * dim.D;
     const s = 0.06;
-    line(d, x - s, H - 0.1, z, x + s, H - 0.1, z);
-    line(d, x, H - 0.1, z - s, x, H - 0.1, z + s);
+    line(ac, x - s, H - 0.1, z, x + s, H - 0.1, z);
+    line(ac, x, H - 0.1, z - s, x, H - 0.1, z + s);
   }
-  // Trees around the edges.
+  // Trees: green trunks, warm canopies.
   const count = 4 + Math.floor(rng() * 3);
   for (let i = 0; i < count; i++) {
     const edge = rng();
     const x = edge < 0.5 ? (rng() < 0.5 ? -hx + 0.6 : hx - 0.6) : -hx + rng() * dim.W;
     const z = edge < 0.5 ? -hz + rng() * dim.D : (rng() < 0.5 ? -hz + 0.6 : hz - 0.6);
-    tree(b, x, z, 2.4 + rng() * 1.0, rng);
+    tree(b, ac, x, z, 2.4 + rng() * 1.0, rng);
   }
   // Ground tufts.
   for (let i = 0; i < 10; i++) {
@@ -104,16 +114,14 @@ function forest(b: Seg, d: Seg, dim: Dims, rng: RNG) {
   }
 }
 
-function tree(b: Seg, x: number, z: number, h: number, rng: RNG) {
+function tree(trunk: Seg, canopy: Seg, x: number, z: number, h: number, rng: RNG) {
   const lean = (rng() - 0.5) * 0.3;
-  line(b, x, 0, z, x + lean, h * 0.55, z);
-  // branches
+  line(trunk, x, 0, z, x + lean, h * 0.55, z);
   for (let i = 0; i < 3; i++) {
     const by = h * (0.35 + i * 0.12);
     const dir = i % 2 === 0 ? 1 : -1;
-    line(b, x + lean * (by / (h * 0.55)), by, z, x + dir * 0.5, by + 0.3, z);
+    line(trunk, x + lean * (by / (h * 0.55)), by, z, x + dir * 0.5, by + 0.3, z);
   }
-  // angular canopy
   const cy = h * 0.55;
   const r = 0.9 + rng() * 0.3;
   const pts = [
@@ -122,14 +130,14 @@ function tree(b: Seg, x: number, z: number, h: number, rng: RNG) {
   ];
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i], q = pts[(i + 1) % pts.length];
-    line(b, p[0], p[1], z, q[0], q[1], z);
+    line(canopy, p[0], p[1], z, q[0], q[1], z);
   }
 }
 
 // House ---------------------------------------------------------------------
-function house(b: Seg, d: Seg, dim: Dims, rng: RNG) {
+function house(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz, H } = half(dim);
-  // Table with legs, slightly off-centre.
+  const { primary: b, detail: d, accent: ac, fire } = buf;
   const tx = (rng() - 0.5) * 1.5, tz = (rng() - 0.5) * 1.5;
   const tw = 1.8, td = 1.0, th = 0.95;
   rectXZ(b, tx - tw / 2, tz - td / 2, tx + tw / 2, tz + td / 2, th);
@@ -137,7 +145,6 @@ function house(b: Seg, d: Seg, dim: Dims, rng: RNG) {
     const px = tx + (lx * tw) / 2 * 0.9, pz = tz + (lz * td) / 2 * 0.9;
     line(b, px, 0, pz, px, th, pz);
   }
-  // A chair.
   const cx = tx + 1.4, cz = tz;
   boxEdges(b, cx, 0.45, cz, 0.5, 0.06, 0.5);
   line(b, cx - 0.22, 0, cz - 0.22, cx - 0.22, 0.45, cz - 0.22);
@@ -145,57 +152,54 @@ function house(b: Seg, d: Seg, dim: Dims, rng: RNG) {
   line(b, cx - 0.22, 0, cz + 0.22, cx - 0.22, 0.9, cz + 0.22);
   line(b, cx + 0.22, 0, cz + 0.22, cx + 0.22, 0.9, cz + 0.22);
   rectXY(b, cx - 0.22, 0.45, cx + 0.22, 0.9, cz + 0.22);
-  // Rug with cross-hatch.
   const rw = 2.6, rd = 1.8;
   rectXZ(d, -rw / 2, -rd / 2, rw / 2, rd / 2, 0.015);
-  for (let i = -2; i <= 2; i++) {
-    line(d, (i * rw) / 5, 0.015, -rd / 2, (i * rw) / 5, 0.015, rd / 2);
-  }
-  // Window on the back wall with panes.
+  for (let i = -2; i <= 2; i++) line(d, (i * rw) / 5, 0.015, -rd / 2, (i * rw) / 5, 0.015, rd / 2);
+  // Window = accent (focal).
   const wy = 1.6;
-  rectXY(b, -0.7, wy - 0.5, 0.7, wy + 0.5, -hz + 0.03);
-  line(b, 0, wy - 0.5, -hz + 0.03, 0, wy + 0.5, -hz + 0.03);
-  line(b, -0.7, wy, -hz + 0.03, 0.7, wy, -hz + 0.03);
-  // Hanging lamp.
+  rectXY(ac, -0.7, wy - 0.5, 0.7, wy + 0.5, -hz + 0.03);
+  line(ac, 0, wy - 0.5, -hz + 0.03, 0, wy + 0.5, -hz + 0.03);
+  line(ac, -0.7, wy, -hz + 0.03, 0.7, wy, -hz + 0.03);
+  // Hanging lamp with a warm flame.
   line(d, 0, H, 0, 0, H - 0.5, 0);
-  diamond(b, 0, H - 0.7, 0, 0.2);
+  diamond(fire, 0, H - 0.7, 0, 0.18);
 }
 
 // Cave / cellar -------------------------------------------------------------
-function cave(b: Seg, d: Seg, dim: Dims, rng: RNG) {
+function cave(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz, H } = half(dim);
+  const { primary: b, detail: d, accent: ac } = buf;
   stalactites(b, dim, rng, 6);
-  // Stalagmites.
   for (let i = 0; i < 4; i++) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D;
     const h = 0.4 + rng() * 0.7;
     line(b, x, 0, z, x - 0.18, 0, z); line(b, x - 0.18, 0, z, x, h, z);
     line(b, x, h, z, x + 0.18, 0, z); line(b, x + 0.18, 0, z, x, 0, z);
   }
-  // Support timber in a corner.
   timberPost(b, hx - 0.6, hz - 0.6, H);
-  // Rubble.
   rubble(d, dim, rng, 8);
-  // Rough stone accents on walls.
   stoneAccents(d, dim, rng);
+  // A glinting mineral vein (accent) on a wall.
+  zigzag(ac, -hx + 0.06, 0.6, -hz + rng() * dim.D, 1.8, 0.0, 5);
 }
 
-function dungeon(b: Seg, d: Seg, dim: Dims, rng: RNG) {
-  const { hx, hz, H } = half(dim);
-  // Pillars on both sides.
+function dungeon(buf: DecorBuf, dim: Dims, rng: RNG) {
+  const { hx, hz } = half(dim);
+  const H = dim.H;
+  const { primary: b, detail: d, fire } = buf;
   boxEdges(b, -hx + 0.7, H / 2, 0, 0.5, H, 0.5);
   boxEdges(b, hx - 0.7, H / 2, 0, 0.5, H, 0.5);
   stalactites(b, dim, rng, 3);
   stoneAccents(d, dim, rng);
   rubble(d, dim, rng, 5);
-  // Iron sconce on back wall.
+  // Iron sconce with a real flame.
   line(b, -1.2, 1.7, -hz + 0.05, -1.0, 2.0, -hz + 0.4);
-  zigzag(b, -1.0, 2.0, -hz + 0.4, 2.5, 0.12, 4);
+  zigzag(fire, -1.0, 2.0, -hz + 0.4, 2.5, 0.12, 4);
 }
 
-function maze(b: Seg, d: Seg, dim: Dims, rng: RNG) {
-  const { hx, hz, H } = half(dim);
-  // False openings and crooked passage hints — disorienting.
+function maze(buf: DecorBuf, dim: Dims, rng: RNG) {
+  const { hx, hz } = half(dim);
+  const { primary: b, detail: d } = buf;
   for (let i = 0; i < 3; i++) {
     const wall = Math.floor(rng() * 4);
     const ox = (rng() - 0.5) * dim.W * 0.5;
@@ -204,33 +208,31 @@ function maze(b: Seg, d: Seg, dim: Dims, rng: RNG) {
   }
   stoneAccents(d, dim, rng);
   rubble(d, dim, rng, 6);
-  // A jumble of angled struts.
   for (let i = 0; i < 5; i++) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D;
     line(b, x, 0, z, x + (rng() - 0.5) * 1.2, 1.0 + rng(), z + (rng() - 0.5) * 1.2);
   }
 }
 
-function temple(b: Seg, d: Seg, dim: Dims, rng: RNG) {
-  const { hx, hz, H } = half(dim);
-  // Colonnade.
+function temple(buf: DecorBuf, dim: Dims, rng: RNG) {
+  const { hx, hz } = half(dim);
+  const H = dim.H;
+  const { primary: b, detail: d, accent: ac } = buf;
   const cols = 3;
   for (let i = 0; i < cols; i++) {
     const z = -hz + (dim.D * (i + 1)) / (cols + 1);
     column(b, -hx + 0.8, z, H);
     column(b, hx - 0.8, z, H);
   }
-  // Altar.
-  boxEdges(b, 0, 0.5, -hz + 1.4, 1.4, 1.0, 0.9);
-  // Arch on the back wall.
-  arch(b, 0, 1.0, -hz + 0.04, 1.4, H - 1.0);
-  // Steps to the altar.
+  // Altar + arch are the focal points (accent).
+  boxEdges(ac, 0, 0.5, -hz + 1.4, 1.4, 1.0, 0.9);
+  arch(ac, 0, 1.0, -hz + 0.04, 1.4, H - 1.0);
   for (let i = 0; i < 3; i++) rectXZ(d, -1.4, -hz + 2.0 + i * 0.4, 1.4, -hz + 2.4 + i * 0.4, 0.1 + i * 0.15);
 }
 
-function river(b: Seg, d: Seg, dim: Dims, rng: RNG) {
+function river(buf: DecorBuf, dim: Dims, rng: RNG) {
   const { hx, hz } = half(dim);
-  // Water surface: layered wavy lines.
+  const { detail: d, water } = buf;
   const level = 0.25;
   for (let r = 0; r < 6; r++) {
     const z = -hz + (dim.D * (r + 1)) / 8;
@@ -240,46 +242,44 @@ function river(b: Seg, d: Seg, dim: Dims, rng: RNG) {
     for (let i = 1; i <= seg; i++) {
       const nx = -hx + (dim.W * i) / seg;
       const ny = level + Math.sin(i * 0.9 + r) * 0.08;
-      line(b, px, py, z, nx, ny, z);
+      line(water, px, py, z, nx, ny, z);
       px = nx; py = ny;
     }
   }
-  // Reeds at the near bank.
   for (let i = 0; i < 8; i++) {
     const x = -hx + rng() * dim.W;
     zigzag(d, x, 0, hz - 0.5 - rng(), 0.8 + rng() * 0.6, 0.08, 4);
   }
 }
 
-function hades(b: Seg, d: Seg, dim: Dims, rng: RNG) {
-  const { hx, hz, H } = half(dim);
-  // Flames rising from the floor.
+function hades(buf: DecorBuf, dim: Dims, rng: RNG) {
+  const { hx, hz } = half(dim);
+  const { primary: b, fire } = buf;
   for (let i = 0; i < 7; i++) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D;
-    zigzag(b, x, 0, z, 0.8 + rng() * 1.0, 0.15, 5);
+    zigzag(fire, x, 0, z, 0.8 + rng() * 1.0, 0.15, 5);
   }
-  // Cracks in the floor glowing.
   for (let i = 0; i < 5; i++) {
     const x = -hx + rng() * dim.W, z = -hz + rng() * dim.D;
-    line(d, x, 0.02, z, x + (rng() - 0.5) * 1.5, 0.02, z + (rng() - 0.5) * 1.5);
+    line(fire, x, 0.02, z, x + (rng() - 0.5) * 1.5, 0.02, z + (rng() - 0.5) * 1.5);
   }
-  // A skull (diamond + jaw) on the back wall.
   diamond(b, 0, 1.8, -hz + 0.05, 0.3);
   line(b, -0.12, 1.7, -hz + 0.05, 0.12, 1.7, -hz + 0.05);
 }
 
-function mine(b: Seg, d: Seg, dim: Dims, rng: RNG) {
-  const { hx, hz, H } = half(dim);
-  // Timber frame supports along the passage.
+function mine(buf: DecorBuf, dim: Dims, rng: RNG) {
+  const { hx, hz } = half(dim);
+  const H = dim.H;
+  const { primary: b, detail: d, accent: ac } = buf;
   for (let i = 0; i < 2; i++) {
     const z = -hz + (dim.D * (i + 1)) / 3;
     line(b, -hx + 0.5, 0, z, -hx + 0.5, H - 0.3, z);
     line(b, hx - 0.5, 0, z, hx - 0.5, H - 0.3, z);
     line(b, -hx + 0.5, H - 0.3, z, hx - 0.5, H - 0.3, z);
   }
-  // Rail tracks with ties.
-  line(b, -0.4, 0.05, -hz, -0.4, 0.05, hz);
-  line(b, 0.4, 0.05, -hz, 0.4, 0.05, hz);
+  // Rails as accent so they lead the eye down the passage.
+  line(ac, -0.4, 0.05, -hz, -0.4, 0.05, hz);
+  line(ac, 0.4, 0.05, -hz, 0.4, 0.05, hz);
   for (let z = -hz + 0.4; z < hz; z += 0.8) line(d, -0.5, 0.04, z, 0.5, 0.04, z);
   stoneAccents(d, dim, rng);
 }
