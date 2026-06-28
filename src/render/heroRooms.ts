@@ -1631,6 +1631,82 @@ for (let i = 1; i <= 5; i++) HERO_ROOMS[`DEAD-END-${i}`] = deadEndHero();
 for (let i = 1; i <= 5; i++) HERO_ROOMS[`RIVER-${i}`] = riverHero();
 for (let i = 1; i <= 4; i++) HERO_ROOMS[`MINE-${i}`] = coalMineHero();
 
+/** A solid 3D house (dark walls + pitched roof) with glowing white edges. */
+function house3D(cx: number, cz: number, front: "door" | "windows" | "ajar" = "door"): THREE.Object3D[] {
+  const out: THREE.Object3D[] = [];
+  const W = 6, H = 4, RH = 6.2, D = 6;
+  const x0 = cx - W / 2, x1 = cx + W / 2;
+  const z0 = cz - D / 2, z1 = cz + D / 2; // z1 = front (toward viewer)
+  const body = 0x191a22, roof = 0x101018, edge = 0xeef2ff;
+  // solid (occluding) walls + roof
+  out.push(surface([[x0, 0, z1], [x1, 0, z1], [x1, H, z1], [x0, H, z1]], body)); // front
+  out.push(surface([[x0, 0, z0], [x0, 0, z1], [x0, H, z1], [x0, H, z0]], 0x111219)); // left
+  out.push(surface([[x1, 0, z0], [x1, 0, z1], [x1, H, z1], [x1, H, z0]], 0x111219)); // right
+  out.push(surface([[x0, H, z1], [x1, H, z1], [cx, RH, z1]], body)); // front gable
+  out.push(surface([[x0, H, z0], [cx, RH, z0], [cx, RH, z1], [x0, H, z1]], roof)); // roof L
+  out.push(surface([[x1, H, z0], [cx, RH, z0], [cx, RH, z1], [x1, H, z1]], roof)); // roof R
+  // glowing edges (silhouette + features)
+  const e: Seg = [];
+  rectXY(e, x0, 0, x1, H, z1); // front outline
+  line(e, x0, H, z1, cx, RH, z1); line(e, x1, H, z1, cx, RH, z1); // gable
+  line(e, cx, RH, z0, cx, RH, z1); // ridge
+  line(e, x0, H, z0, x0, H, z1); line(e, x1, H, z0, x1, H, z1); // eaves
+  line(e, x0, 0, z1, x0, H, z1); // corners already in rect; add depth hint
+  const dz = z1 + 0.02;
+  if (front === "door") {
+    rectXY(e, cx - 0.7, 0, cx + 0.7, 2.2, dz); // boarded front door
+    line(e, cx - 0.7, 0.4, dz, cx + 0.7, 1.6, dz); line(e, cx - 0.7, 1.6, dz, cx + 0.7, 0.4, dz);
+    rectXY(e, cx - 2.3, 1.6, cx - 1.3, 2.6, dz);
+    rectXY(e, cx + 1.3, 1.6, cx + 2.3, 2.6, dz);
+  } else if (front === "windows") {
+    for (const wx of [-2, 0, 2]) { // boarded windows, no door
+      rectXY(e, cx + wx - 0.55, 1.4, cx + wx + 0.55, 2.5, dz);
+      line(e, cx + wx - 0.55, 1.4, dz, cx + wx + 0.55, 2.5, dz);
+      line(e, cx + wx - 0.55, 2.5, dz, cx + wx + 0.55, 1.4, dz);
+    }
+  } else { // ajar window
+    rectXY(e, cx - 2, 1.4, cx - 1, 2.5, dz);
+    rectXY(e, cx + 1, 1.4, cx + 2, 2.5, dz);
+    line(e, cx + 2, 1.4, dz, cx + 2.7, 1.2, dz + 0.7); // swung-open pane
+    line(e, cx + 2, 2.5, dz, cx + 2.7, 2.3, dz + 0.7);
+  }
+  out.push(makeLines(e, edge, 1));
+  return out;
+}
+
+/** A distant tree-line silhouette across the back of an outdoor scene. */
+function treeLine(out: THREE.Object3D[], z: number, color = 0x2f8a4a) {
+  const top: V3[] = [];
+  for (let x = -34; x <= 34; x += 2) top.push([x, 1.5 + Math.abs(Math.sin(x * 0.8)) * 2 + Math.cos(x * 0.4) * 0.8, z]);
+  out.push(surface([[-34, -2, z], ...top, [34, -2, z]], 0x0a140c));
+  const e: Seg = [];
+  for (let i = 0; i < top.length - 1; i++) line(e, top[i][0], top[i][1], z, top[i + 1][0], top[i + 1][1], z);
+  out.push(makeLines(e, color, 0.7));
+}
+
+// === Redo the house-exterior rooms as solid 3D ===
+Object.assign(HERO_ROOMS, {
+  "WEST-OF-HOUSE": houseRoom("An open field west of the white house, its boarded front door facing you.", "door", ["FRONT-DOOR"]),
+  "NORTH-OF-HOUSE": houseRoom("The north side of the white house; all the windows are boarded, a path leads north.", "windows"),
+  "SOUTH-OF-HOUSE": houseRoom("The south side of the white house; the windows are boarded.", "windows"),
+  "EAST-OF-HOUSE": houseRoom("Behind the white house; a small window is ajar.", "ajar"),
+});
+
+function houseRoom(note: string, front: "door" | "windows" | "ajar", suppress?: string[]): HeroSpec {
+  return {
+    note,
+    suppress,
+    camera: { pos: [-4.5, 2.6, 9], look: [0.5, 2.2, -4] },
+    build: () => {
+      const out: THREE.Object3D[] = [];
+      out.push(surface([[-34, 0, 10], [34, 0, 10], [34, 0, -30], [-34, 0, -30]], 0x14200f)); // grassy field
+      treeLine(out, -26);
+      for (const o of house3D(0, -6, front)) out.push(o);
+      return out;
+    },
+  };
+}
+
 // === Redo the outdoor landscape rooms with the composer (real 3D vistas) ===
 Object.assign(HERO_ROOMS, {
   "CANYON-BOTTOM": landscape({ note: "Beneath the canyon walls; the runoff of Aragain Falls flows by, a path north.", ridge: "cliffs", water: "river", atWater: true }),
