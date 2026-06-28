@@ -4,6 +4,8 @@ import { RoomState } from "./engine/roomState.ts";
 import { Viewport } from "./render/viewport.ts";
 import { Compass } from "./ui/compass.ts";
 import { startTitleScene } from "./ui/titleScene.ts";
+import { Scene2D } from "./ui/scene2d.ts";
+import { getRoomScene } from "./ui/roomScenes.ts";
 
 const output = document.getElementById("output") as HTMLElement;
 const input = document.getElementById("input") as HTMLInputElement;
@@ -14,6 +16,7 @@ const SAVE_KEY = "zork1:quetzal";
 // Z-machine does NOT boot until the player presses ENTER on the title — so the
 // game never auto-starts.
 const viewport = new Viewport(canvas);
+const scene2d = new Scene2D(document.getElementById("scene2d") as HTMLCanvasElement);
 const compass = new Compass(document.getElementById("viewport") as HTMLElement);
 const rooms = new RoomState();
 const roomsLoaded = rooms.load();
@@ -33,8 +36,15 @@ function autosave() {
 }
 
 rooms.onChange((change) => {
-  viewport.showRoom(change.room, change.enteredFrom);
   compass.update(change.room);
+  // Rooms with a hand-composed 2D scene use the canvas overlay; the rest use 3D.
+  const scene = getRoomScene(change.room.id);
+  if (scene) {
+    scene2d.show(scene);
+  } else {
+    scene2d.hide();
+    viewport.showRoom(change.room, change.enteredFrom);
+  }
 });
 
 async function startGame() {
