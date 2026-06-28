@@ -3,6 +3,7 @@ import { bootZork } from "./engine/zvm.ts";
 import { RoomState } from "./engine/roomState.ts";
 import { Viewport } from "./render/viewport.ts";
 import { Compass } from "./ui/compass.ts";
+import { startTitleScene } from "./ui/titleScene.ts";
 
 const output = document.getElementById("output") as HTMLElement;
 const input = document.getElementById("input") as HTMLInputElement;
@@ -91,10 +92,13 @@ async function startGame() {
 
 // --- Title screen: only a REAL Enter/click begins the game -----------------
 const welcome = document.getElementById("welcome");
+const titleCanvas = document.getElementById("welcome-canvas") as HTMLCanvasElement | null;
+const stopTitle = titleCanvas ? startTitleScene(titleCanvas) : () => {};
 let begun = false;
 function begin() {
   if (begun) return;
   begun = true;
+  stopTitle();
   welcome?.classList.add("hidden");
   setTimeout(() => welcome?.remove(), 1100);
   input.focus();
