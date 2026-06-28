@@ -30,6 +30,8 @@ const OUTDOOR = new Set(["forest"]);
 export interface BuiltRoom {
   group: THREE.Group;
   entryFacing: (dir?: string) => { pos: THREE.Vector3 };
+  /** Room footprint, for sizing the floor grid fade. */
+  dims: { W: number; H: number; D: number };
   /** Optional per-frame animation for hero rooms. */
   animate?: (t: number) => void;
 }
@@ -126,7 +128,7 @@ export function buildRoom(room: Room): BuiltRoom {
   const animate =
     hero?.animate && heroObjs ? (t: number) => hero.animate!(heroObjs!, t) : undefined;
 
-  return { group, entryFacing, animate };
+  return { group, entryFacing, dims: { W, H, D }, animate };
 }
 
 function placeObjects(

@@ -11,8 +11,31 @@ interface FileRef {
 
 const KEY_PREFIX = "zork1:file:";
 
+const AUTOSAVE_PREFIX = "zork1:autosave:";
+
 export class LocalDialog {
   streaming = false;
+  /** True if the last boot restored a saved game (so the UI can repaint). */
+  lastAutorestore = false;
+
+  // --- autosave (whole-VM snapshot persisted as JSON) ----------------------
+  autosave_read(signature: string): unknown {
+    const raw = localStorage.getItem(AUTOSAVE_PREFIX + signature);
+    if (raw === null) return null;
+    try {
+      const snap = JSON.parse(raw);
+      this.lastAutorestore = !!snap;
+      return snap;
+    } catch {
+      return null;
+    }
+  }
+
+  autosave_write(signature: string, snapshot: unknown): void {
+    const key = AUTOSAVE_PREFIX + signature;
+    if (snapshot === null || snapshot === undefined) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(snapshot));
+  }
 
   file_clean_fixed_name(filename: string, _usage: number): string {
     return String(filename).replace(/[^a-zA-Z0-9_.-]/g, "_");

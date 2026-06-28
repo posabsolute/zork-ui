@@ -101,7 +101,9 @@ export class WebGlkOte {
   log(_msg: string) {}
   warning(_msg: string) {}
   save_allstate() {
-    return null;
+    // Display-state autosave isn't needed; the game state lives in the VM/Glk
+    // snapshot. Return an object (not null) so GlkApi can store it.
+    return {};
   }
   getinterface() {
     return this.iface;

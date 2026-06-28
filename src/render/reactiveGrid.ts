@@ -68,6 +68,13 @@ export class ReactiveGrid {
     this.computeColors();
   }
 
+  /** Set where the grid starts fading and where it reaches black. */
+  setExtent(rInner: number, rOuter: number) {
+    this.rInner = rInner;
+    this.rOuter = rOuter;
+    this.computeColors();
+  }
+
   pulse(t: number, x = 0, z = 0, strength = 1) {
     this.pulses.push({ t0: t, x, z, strength });
     if (this.pulses.length > 6) this.pulses.shift();

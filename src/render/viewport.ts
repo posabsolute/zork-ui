@@ -79,6 +79,10 @@ export class Viewport {
     this.camera.lookAt(0, 1.4, 0);
     this.targetYaw = this.camera.rotation.y;
 
+    // Fade the floor grid just outside the room footprint so it doesn't sprawl.
+    const ext = Math.max(built.dims.W, built.dims.D) / 2;
+    this.grid.setExtent(ext + 0.4, ext + (OUTDOOR.has(room.region) ? 5 : 2.5));
+
     const palette = getPalette(room.region);
     const isOutdoor = OUTDOOR.has(room.region);
     // Outdoor: cool sky-blue stars + a cool grid. Indoor: warm motes + region grid.

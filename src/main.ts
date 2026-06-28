@@ -12,7 +12,21 @@ async function start() {
   const rooms = new RoomState();
   await rooms.load();
 
+  const SAVE_KEY = "zork1:quetzal";
   let latestStatus = "";
+  let gameRef: any = null; // assigned after boot; first onInputReady fires during boot
+
+  // Silent autosave: a low-level Quetzal snapshot of RAM/stack/PC to localStorage.
+  function autosave() {
+    if (!gameRef) return;
+    try {
+      const buf = gameRef.vm.save_file(gameRef.vm.pc, 1);
+      const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+      localStorage.setItem(SAVE_KEY, JSON.stringify(Array.from(u8)));
+    } catch (e) {
+      console.warn("autosave failed", e);
+    }
+  }
 
   rooms.onChange((change) => {
     console.log(
@@ -45,11 +59,32 @@ async function start() {
       },
       onInputReady() {
         rooms.update(latestStatus);
+        autosave(); // persist after each settled turn (no-op until boot finishes)
       },
     },
   });
 
+  gameRef = game;
   rooms.attach(game.vm);
+
+  // Restore a saved game, if present. The VM is now suspended at the opening
+  // prompt (a read instruction); swapping in the saved RAM/stack/PC and issuing
+  // a free "look" resumes exactly where the player left off.
+  const saved = localStorage.getItem(SAVE_KEY);
+  if (saved) {
+    try {
+      const u8 = Uint8Array.from(JSON.parse(saved));
+      if (game.vm.restore_file(u8, 1)) {
+        output.replaceChildren(); // clear the fresh-game intro
+        input.value = "look";
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      }
+    } catch (e) {
+      console.warn("restore failed", e);
+      localStorage.removeItem(SAVE_KEY);
+    }
+  }
+
   // Resolve the opening room once the first prompt is ready.
   setTimeout(() => rooms.update(latestStatus), 0);
 
