@@ -114,8 +114,9 @@ export function buildRoom(room: Room): BuiltRoom {
 
   // Object icons, placed where they belong (floor items on the floor, fixtures
   // on walls) rather than floating in a ring. Always the highlight colour so
-  // interactables read the same in every room.
-  placeObjects(group, room, OBJECT_HIGHLIGHT, { W, H, D }, doorDirs);
+  // interactables read the same in every room. Hero rooms can draw some objects
+  // themselves (furniture) — those are suppressed here to avoid duplicates.
+  placeObjects(group, room, OBJECT_HIGHLIGHT, { W, H, D }, doorDirs, hero?.suppress ?? []);
 
   const entryFacing = (dir?: string) => {
     const back = oppositeCardinal(dir);
@@ -136,7 +137,8 @@ function placeObjects(
   room: Room,
   color: number,
   dim: { W: number; H: number; D: number },
-  doorDirs: Set<string>
+  doorDirs: Set<string>,
+  suppress: string[]
 ) {
   const hx = dim.W / 2,
     hz = dim.D / 2;
@@ -156,6 +158,7 @@ function placeObjects(
   let floorIdx = 0;
 
   for (const id of room.objects) {
+    if (suppress.includes(id)) continue; // the hero room draws this itself
     const icon = buildObjectIcon(id, id);
     const ls = makeLines(icon.segs, color, 1);
 

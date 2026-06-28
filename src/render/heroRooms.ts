@@ -33,6 +33,8 @@ export interface HeroSpec {
   build: (ctx: HeroCtx) => THREE.Object3D[];
   /** Optional per-frame animation over the objects build() returned. */
   animate?: (objs: THREE.Object3D[], t: number) => void;
+  /** Object ids the hero draws itself, so the generic icon isn't duplicated. */
+  suppress?: string[];
   /** Short note for the tracking doc. */
   note: string;
 }
@@ -51,30 +53,43 @@ function rc(a: Seg, m: Map2, u1: number, y1: number, u2: number, y2: number) {
   ln(a, m, u1, y2, u1, y1);
 }
 
+interface HouseOpts {
+  boardedDoor?: boolean;
+  openWindow?: boolean;
+  boardedWindows?: boolean;
+  noDoor?: boolean; // only the front (west) has a door
+}
+
+/** Boards (an X plus a slat) across a window/door rectangle. */
+function boards(a: Seg, m: Map2, x1: number, y1: number, x2: number, y2: number) {
+  ln(a, m, x1, y1, x2, y2);
+  ln(a, m, x1, y2, x2, y1);
+  ln(a, m, x1, (y1 + y2) / 2, x2, (y1 + y2) / 2);
+}
+
 /** The white house facade, drawn in a wall plane chosen by `m`. */
-function whiteHouse(a: Seg, m: Map2, opts: { boardedDoor?: boolean; openWindow?: boolean } = {}) {
+function whiteHouse(a: Seg, m: Map2, opts: HouseOpts = {}) {
   const W = 2.6, bodyH = 2.6, roofH = 3.8;
   rc(a, m, -W, 0, W, bodyH); // body
   ln(a, m, -W - 0.2, bodyH, 0, roofH); // roof
   ln(a, m, 0, roofH, W + 0.2, bodyH);
   ln(a, m, -W - 0.2, bodyH, W + 0.2, bodyH);
-  // door
-  rc(a, m, -0.5, 0, 0.5, 1.6);
-  if (opts.boardedDoor) {
-    ln(a, m, -0.5, 0.4, 0.5, 1.2);
-    ln(a, m, -0.5, 1.2, 0.5, 0.4);
-    ln(a, m, -0.5, 0.8, 0.5, 0.8);
+  // door (only the front of the house has one)
+  if (!opts.noDoor) {
+    rc(a, m, -0.5, 0, 0.5, 1.6);
+    if (opts.boardedDoor) boards(a, m, -0.5, 0.2, 0.5, 1.4);
   }
-  // windows
+  // two windows
   rc(a, m, -1.7, 1.4, -1.0, 2.1);
+  if (opts.boardedWindows) boards(a, m, -1.7, 1.4, -1.0, 2.1);
   if (opts.openWindow) {
-    // right window ajar
     ln(a, m, 1.0, 1.4, 1.7, 1.4);
     ln(a, m, 1.0, 1.4, 1.0, 2.1);
     ln(a, m, 1.0, 2.1, 1.9, 2.4); // swung-open pane
     ln(a, m, 1.7, 1.4, 1.9, 2.4);
   } else {
     rc(a, m, 1.0, 1.4, 1.7, 2.1);
+    if (opts.boardedWindows) boards(a, m, 1.0, 1.4, 1.7, 2.1);
   }
 }
 
@@ -169,6 +184,36 @@ function flame(a: Seg, x: number, z: number, h: number) {
   zigzag(a, x + 0.12, 0, z, h * 0.7, 0.08, 4);
 }
 
+/** A tree: trunk into `trunk`, angular canopy into `canopy`. */
+function heroTree(trunk: Seg, canopy: Seg, x: number, z: number, h: number) {
+  line(trunk, x, 0, z, x, h * 0.55, z);
+  const cy = h * 0.55, r = 0.9;
+  const pts: [number, number][] = [
+    [x, h], [x - r, cy], [x - r * 0.5, cy + 0.4], [x + r * 0.5, cy + 0.4], [x + r, cy],
+  ];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    line(canopy, p[0], p[1], z, q[0], q[1], z);
+  }
+}
+
+/** A great tree with low climbable branches. */
+function bigTree(trunk: Seg, canopy: Seg, x: number, z: number, h: number) {
+  line(trunk, x, 0, z, x, h * 0.6, z);
+  for (let i = 0; i < 4; i++) {
+    const by = 0.8 + i * 0.6, dir = i % 2 === 0 ? 1 : -1;
+    line(trunk, x, by, z, x + dir * 1.0, by + 0.3, z); // low branches
+  }
+  const cy = h * 0.6, r = 1.6;
+  const pts: [number, number][] = [
+    [x, h], [x - r, cy], [x - r * 0.6, cy + 0.6], [x + r * 0.6, cy + 0.6], [x + r, cy],
+  ];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    line(canopy, p[0], p[1], z, q[0], q[1], z);
+  }
+}
+
 // --- the registry (the tracked hero set) -----------------------------------
 export const HERO_ROOMS: Record<string, HeroSpec> = {
   "WEST-OF-HOUSE": {
@@ -185,7 +230,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
     build: ({ dims, palette, rng }) => {
       const env: Seg = [], house: Seg = [];
       openField(env, dims, rng);
-      whiteHouse(house, southWall(dims), {});
+      whiteHouse(house, southWall(dims), { boardedWindows: true, noDoor: true });
       return [makeLines(env, palette.detail, 0.75), makeLines(house, palette.primary, 1)];
     },
   },
@@ -194,7 +239,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
     build: ({ dims, palette, rng }) => {
       const env: Seg = [], house: Seg = [];
       openField(env, dims, rng);
-      whiteHouse(house, northWall(dims), {});
+      whiteHouse(house, northWall(dims), { boardedWindows: true, noDoor: true });
       return [makeLines(env, palette.detail, 0.75), makeLines(house, palette.primary, 1)];
     },
   },
@@ -203,12 +248,13 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
     build: ({ dims, palette, rng }) => {
       const env: Seg = [], house: Seg = [];
       openField(env, dims, rng);
-      whiteHouse(house, westWall(dims), { openWindow: true });
+      whiteHouse(house, westWall(dims), { openWindow: true, noDoor: true });
       return [makeLines(env, palette.detail, 0.75), makeLines(house, palette.primary, 1)];
     },
   },
   "LIVING-ROOM": {
-    note: "Trophy case on the wall, oriental rug centre, trap door beneath it, lamp.",
+    note: "Trophy case, oriental rug, trap door beneath it, wooden gothic door west.",
+    suppress: ["TROPHY-CASE", "RUG", "TRAP-DOOR", "WOODEN-DOOR"],
     build: ({ dims, palette }) => {
       const focal: Seg = [], structure: Seg = [], dim: Seg = [];
       const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
@@ -217,6 +263,12 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
       rc(focal, m, -1.0, 0.4, 1.0, 2.0);
       ln(focal, m, -1.0, 1.0, 1.0, 1.0);
       ln(focal, m, -1.0, 1.5, 1.0, 1.5);
+      // The wooden door with gothic lettering, to the west.
+      const wm = westWall(dims);
+      rc(structure, wm, -0.5, 0, 0.5, 2.0);
+      ln(structure, wm, -0.5, 2.0, 0, 2.4); // gothic point
+      ln(structure, wm, 0.5, 2.0, 0, 2.4);
+      ln(structure, wm, -0.3, 1.0, 0.3, 1.0); // lettering hint
       // Oriental rug.
       rectXZ(dim, -1.5, -1.0, 1.5, 1.0, 0.015);
       for (let i = -3; i <= 3; i++) line(dim, (i * 1.5) / 4, 0.015, -1.0, (i * 1.5) / 4, 0.015, 1.0);
@@ -233,13 +285,16 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
     },
   },
   "KITCHEN": {
-    note: "Table with a sack and bottle, chimney, window to the east, stairs up.",
+    note: "Table (sack + bottle), chimney, window ajar east, stairs up, dark stair down.",
+    suppress: ["KITCHEN-TABLE"],
     build: ({ dims, palette }) => {
       const a: Seg = [], focal: Seg = [], dim: Seg = [];
-      const hx = dims.W / 2, H = dims.H;
-      // Table.
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      // Table with a sack and a bottle on it (described).
       rectXZ(a, -0.9, -0.5, 0.9, 0.5, 0.95);
       for (const [lx, lz] of [[-0.8, -0.4], [0.8, -0.4], [0.8, 0.4], [-0.8, 0.4]]) line(a, lx, 0, lz, lx, 0.95, lz);
+      boxEdges(a, -0.4, 1.1, 0, 0.3, 0.3, 0.3); // sack
+      line(a, 0.4, 0.95, 0, 0.4, 1.25, 0); // bottle
       // Window on the east wall (ajar to "Behind House") — focal accent.
       const m = eastWall(dims);
       rc(focal, m, -0.6, 1.3, 0.6, 2.2);
@@ -248,12 +303,75 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
       line(a, -hx + 0.4, 0, 0, -hx + 0.4, H, 0);
       line(a, -hx + 1.0, 0, 0, -hx + 1.0, H, 0);
       line(a, -hx + 0.4, H, 0, -hx + 1.0, H, 0);
+      // Staircase up to the attic (steps rising in the back corner).
+      for (let i = 0; i < 4; i++) rectXZ(a, hx - 1.8, -hz + 0.6, hx - 0.6, -hz + 1.0 + i * 0.25, 0.3 + i * 0.35);
+      // Dark stairway down (to the studio) — a black hatch.
+      rectXZ(dim, hx - 1.6, hz - 1.6, hx - 0.6, hz - 0.6, 0.02);
       // Floor boards.
       for (let i = 1; i < 6; i++) line(dim, -hx, 0.01, -dims.D / 2 + (dims.D * i) / 6, hx, 0.01, -dims.D / 2 + (dims.D * i) / 6);
       return [
         makeLines(a, palette.primary, 1),
         moving(makeLines(focal, palette.accent, 1)), // window ajar glows
         makeLines(dim, scaleColor(palette.primary, 0.5), 0.7),
+      ];
+    },
+  },
+  "FOREST-1": {
+    note: "Forest, trees in all directions; sunlight breaks through to the east.",
+    build: ({ dims, palette }) => {
+      const trunks: Seg = [], leaves: Seg = [], sun: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        heroTree(trunks, leaves, Math.cos(a) * (hx - 0.6), Math.sin(a) * (hz - 0.6), 2.6 + (i % 3) * 0.4);
+      }
+      for (let i = 0; i < 5; i++) {
+        const y = 1.0 + i * 0.5;
+        line(sun, hx - 0.2, y, -1.5 + i * 0.6, hx + 2, y - 0.4, -2 + i * 0.7); // sunbeams east
+      }
+      return [
+        makeLines(trunks, palette.primary, 1),
+        makeLines(leaves, palette.accent, 1),
+        moving(makeLines(sun, 0xffe07a, 0.9), "twinkle"),
+      ];
+    },
+  },
+  "PATH": {
+    note: "Forest path N-S; one great tree with low branches stands at its edge (climb up).",
+    build: ({ dims, palette }) => {
+      const trunks: Seg = [], leaves: Seg = [], path: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let i = 0; i < 6; i++) {
+        heroTree(trunks, leaves, -hx + 0.6 + i * (dims.W / 6), i % 2 ? hz - 0.7 : -hz + 0.7, 2.4 + (i % 2) * 0.5);
+      }
+      bigTree(trunks, leaves, hx - 1.6, 0, 4.4); // the great climbable tree
+      line(path, -0.4, 0.02, -hz, -0.4, 0.02, hz);
+      line(path, 0.4, 0.02, -hz, 0.4, 0.02, hz);
+      return [
+        makeLines(trunks, palette.primary, 1),
+        makeLines(leaves, palette.accent, 1),
+        makeLines(path, palette.detail, 0.6),
+      ];
+    },
+  },
+  "UP-A-TREE": {
+    note: "High in the great tree: low branches, a bird's nest, a singing songbird.",
+    suppress: ["NEST"],
+    build: ({ palette }) => {
+      const branches: Seg = [], nest: Seg = [], bird: Seg = [];
+      line(branches, 0, -1.2, 0, 0, 1.4, 0); // trunk through the view
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        line(branches, 0, 0.2, 0, Math.cos(a) * 2.4, 0.5 + Math.sin(a * 2) * 0.5, Math.sin(a) * 2.4);
+      }
+      ring(nest, 1.6, 0.7, 0.4, 1.0); // bird's nest on a branch
+      ring(nest, 1.6, 0.7, 0.3, 1.15);
+      line(bird, -1.4, 1.6, -0.6, -1.1, 1.85, -0.6); // songbird (a V)
+      line(bird, -1.1, 1.85, -0.6, -0.8, 1.6, -0.6);
+      return [
+        makeLines(branches, palette.primary, 1),
+        makeLines(nest, 0xfff0d0, 1),
+        moving(makeLines(bird, palette.accent, 1), "wisp"), // it flits about
       ];
     },
   },
@@ -550,6 +668,7 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
   },
   "ATTIC": {
     note: "A dark, cramped attic; a table, a coil of rope, a nasty knife.",
+    suppress: ["ATTIC-TABLE", "ROPE"],
     build: ({ dims, palette }) => {
       const a: Seg = [], ac: Seg = [];
       const H = dims.H;
