@@ -1,0 +1,86 @@
+:root {
+  --term-fg: #33ff66;
+  --term-fg-dim: #1f9a3e;
+  --term-bg: #04140a;
+  --term-font: "Courier New", "DejaVu Sans Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  font-family: var(--term-font);
+}
+
+#app {
+  display: grid;
+  grid-template-rows: 62fr 38fr; /* viewport-dominant */
+  height: 100vh;
+  width: 100vw;
+  gap: 0;
+}
+
+#viewport {
+  position: relative;
+  background: #000;
+  overflow: hidden;
+  border-bottom: 2px solid #0a3318;
+}
+#viewport canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#terminal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--term-bg);
+  color: var(--term-fg);
+  padding: 14px 18px 10px;
+  overflow: hidden;
+  text-shadow: 0 0 4px rgba(51, 255, 102, 0.55);
+}
+
+#output {
+  flex: 1;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 15px;
+  line-height: 1.32;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-fg-dim) transparent;
+  z-index: 1;
+}
+#output::-webkit-scrollbar { width: 8px; }
+#output::-webkit-scrollbar-thumb { background: var(--term-fg-dim); }
+
+#output .room-header { color: #7dffa6; font-weight: bold; }
+#output .echo { color: #8affb0; }
+#output .sys { color: #d8ff6a; }
+
+#prompt-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  z-index: 2;
+}
+#caret { color: var(--term-fg); }
+#input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--term-fg);
+  font-family: var(--term-font);
+  font-size: 15px;
+  text-shadow: inherit;
+  caret-color: var(--term-fg);
+}
+

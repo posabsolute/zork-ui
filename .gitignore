@@ -5,3 +5,5 @@ dist/
 .vite/
 .env
 .env.local
+.npm-cache/
+vendor/

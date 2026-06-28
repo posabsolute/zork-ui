@@ -1,150 +1,77 @@
 # Zork I — Authentic Game, Amazing Retro Visuals
 
 ## Context
+New project (`zork-ui`). Play Zork I exactly as the original (authentic Z-machine via
+ifvms.js/ZVM running the now-MIT story file), augmented with a procedurally generated
+PS1/Carmack-era first-person 3D view of the current room, built from the MIT-licensed ZIL
+map data. Viewport-dominant layout: large 3D view above an authentic text terminal.
 
-We are starting a **new, empty project** (`zork-ui`). Goal: play **Zork I exactly as the
-original** — the parser, responses, and every interaction byte-for-byte authentic — but
-**augmented with a beautiful retro 3D view of the room you're standing in**. The text game
-drives play; the visuals support it.
+## Decisions (settled)
+| Axis | Choice |
+|---|---|
+| Game logic | ifvms.js ZVM, real `.z3` story file — do NOT write a Z-machine |
+| Renderer | Three.js, deliberately constrained to early-3D + CRT post |
+| Room coverage | Procedural from parsed ZIL (all rooms); hand-tune hero rooms later |
+| Current-room signal | Object-tree parent of ADVENTURER (primary), global-16 (check), header (fallback) |
+| objNum↔id map | Parse generated `.zap` `.OBJECT` order — deterministic, disambiguates Forest/Maze |
+| Layout | Viewport-dominant: 3D above, terminal + `>` input below |
 
-Two things make this feasible and clean right now:
+## Confirmed technical facts
+- ZVM exposes `vm.m` (whole image), `vm.ram` (live dynamic memory), and header pointers
+  `vm.objects`, `vm.globals`, `vm.properties`, `vm.staticmem`, `vm.version`. Read live state
+  from `vm.ram`.
+- v3 object entry = 9 bytes (4 attr, parent, sibling, child, 2 prop-ptr); objects begin at
+  `vm.objects + 62` (31 property-default words). Object N at base + (N-1)*9.
+- current room = parent(ADVENTURER objNum); cross-check global-16 (`vm.ram.getUint16(vm.globals)`).
+- Light = room attribute ONBIT set OR any object in player's inventory subtree has ONBIT.
+- ZVM needs a Glk implementation — use a minimal custom Glk bridge (not full GlkOte).
 
-1. **Zork I is open source (MIT) as of Nov 2025** — Microsoft/Activision released the
-   original ZIL source at `historicalsource/zork1`. No copyright gray area.
-2. **The ZIL source encodes the entire map as data.** Every room declares its exits as
-   `(NORTH TO NORTH-OF-HOUSE)`, plus description, contained objects, and flags (e.g.
-   `RLANDBIT`, `ONBIT` for light). We can parse this into a room graph and **generate the
-   3D spaces from the real game data** instead of hand-building ~110 rooms.
+## Build pipeline (assets)
+1. Clone `historicalsource/zork1`.
+2. ZILF: `Zilf <main>.zil` → `*.zap`; `Zapf <main>.zap` → `zork1.z3` (.NET).
+3. Commit built `public/zork1.z3`; document build in README.
+4. `tools/parse-zap.mjs`: parse `.OBJECT` directives → objNum→zilId map (all objects).
+5. `tools/parse-zil.mjs`: parse `1dungeon.zil` → `rooms.json` + `objects.json`; join on zilId.
+   FALLBACK if ZILF blocked: prebuilt MIT `.z3` + objNum map via runtime dump.
 
-Design philosophy for the "best retro graphics ever" (grounded in Carmack / PS1-era
-technique): you don't get the retro look from a weak engine — you get it from a **capable
-engine deliberately constrained**. Use Three.js (real first-person 3D, so you can actually
-"see the space"), then clamp it to the early-3D aesthetic: low internal render resolution,
-vertex snapping, affine (non-perspective) texture mapping, ordered dithering + 15-bit color
-quantization, and a CRT post-process (scanlines, phosphor glow, barrel curvature,
-chromatic aberration). This is the "Dusk/Wrath" approach — modern tech, 1993 soul.
+## File structure
+public/zork1.z3, public/rooms.json, public/objects.json
+tools/parse-zil.mjs, tools/parse-zap.mjs, tools/build-assets.sh
+src/main.ts
+src/engine/zvm.ts        — load story, lifecycle, run/resume
+src/engine/glkBridge.ts  — minimal Glk: line/char input, main+status windows → events
+src/engine/introspect.ts — read object tree & globals from vm.ram each turn
+src/engine/roomState.ts  — rooms.json/objects.json, objNum→id, current room + contents + dark
+src/ui/terminal.ts       — output render, `>` input, history, CRT-styled
+src/render/viewport.ts   — renderer, low-res RT, first-person camera, scene swap, transitions
+src/render/roomBuilder.ts— room box, exit doorways, stairs/hatch, prop sprites, region palette
+src/render/sprites.ts    — objNum/zilId → sprite/material; darkness rendering
+src/render/retro/*.glsl  — vertex-snap, affine UV, 15-bit+Bayer, CRT pass
+src/config/retroConfig.ts, src/config/regions.ts
 
-## Decisions (made, not open questions)
-
-| Axis | Choice | Why |
-|---|---|---|
-| Game logic | **Authentic Z-machine** — run real story file in `ifvms.js` (ZVM) | Identical parser/responses; "stay true" is non-negotiable |
-| Renderer | **Three.js**, retro-constrained pipeline | Real first-person 3D = truly "see the space"; retro comes from shaders, so we get *amazing AND retro*, and it scales to procedural rooms (incl. up/down stairs Zork uses heavily) |
-| Room coverage | **Procedural from parsed ZIL (all rooms)**, hand-tune a few hero rooms later | Real data foundation; full coverage; no 110-room manual slog |
-| Current-room signal | **Read player object's parent from Z-machine object tree** (spec layout), text-header as cross-check | Robust through darkness / repeat visits, interpreter-agnostic |
-| Layout | **Viewport-dominant**: large 3D view, authentic terminal + input below | "See the space" is the star; text still drives play |
-
-## Tech stack
-
-- **Vite + TypeScript** app scaffold.
-- **three** for the 3D viewport + a small custom post-processing chain (EffectComposer).
-- **ifvms.js** (ZVM) as the Z-machine engine (npm `ifvms`), fed the Zork I story file.
-- Custom DOM/canvas **terminal** (xterm.js optional; a lean custom one is fine and easier
-  to CRT-style) for I/O.
-- **Build-time tools:** ZILF (C#/.NET tool) to compile `historicalsource/zork1` ZIL → `.z3`
-  story file; a Node script to parse ZIL → `rooms.json`.
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────┐
-│  Three.js viewport (retro pipeline + CRT)     │  ← renders current room scene
-├─────────────────────────────────────────────┤
-│  Terminal: authentic Zork text + > input      │  ← ifvms ZVM I/O
-└─────────────────────────────────────────────┘
-        ▲                         ▲
-        │ currentRoomId           │ text in/out
-   RoomState  ◀── object-tree ──  ZVM engine (story file)
-   (rooms.json: exits, objects, region, light)
-```
-
-Single source of truth for *gameplay* = the story file in ZVM. Single source of truth for
-*space layout* = `rooms.json` parsed from ZIL. The bridge is `currentRoomId`, derived each
-turn from the Z-machine object tree (player object → parent room → map object# to room name
-via the names dumped during ZIL parse).
-
-## Build phases
-
-### Phase 0 — Scaffold & assets
-- `npm create vite@latest` (vanilla-ts), add `three`, `ifvms`.
-- Vendor the Zork I assets: clone `historicalsource/zork1`. Produce the story file via ZILF
-  (canonical, MIT-clean) and **commit the built `.z3`** to `public/` for dev convenience;
-  document the build command in `README`.
-- Files: `package.json`, `vite.config.ts`, `index.html`, `README.md`.
-
-### Phase 1 — Authentic game playable (text only)
-- `src/engine/zvm.ts`: load story file, wire ZVM input/output, expose `send(command)` and
-  an output stream.
-- `src/ui/terminal.ts`: render output, capture `>` input, history. Verify the game is
-  genuinely identical to original (opening text "West of House", `open mailbox`, `read leaflet`,
-  `go north`, `enter house`, etc.).
-- **Gate:** plays exactly like real Zork before any 3D work.
-
-### Phase 2 — Map data from ZIL
-- `tools/parse-zil.mjs`: parse `1dungeon.zil` (+ relevant `.zil`) ROOM objects → `rooms.json`:
-  `{ id, name, desc, exits: {dir: {to, condition?}}, objects: [...], region, lightFlag }`.
-  Region derived from area (above-ground, house interior, cellar, dungeon, river/coast, etc.)
-  to drive palette/mood.
-- `src/engine/roomState.ts`: load `rooms.json`; map Z-machine **object number → room id** so
-  the live engine's current room resolves to a graph node.
-
-### Phase 3 — Current-room introspection
-- `src/engine/introspect.ts`: after each turn, read the player object's parent from ZVM's
-  memory (object table base from header; standard Z-machine v3 object layout). Emit
-  `onRoomChange(roomId)`. Fallback/cross-check: match printed room header line.
-- **Gate:** moving in the text game logs the correct `currentRoomId` every time, including
-  dark rooms and revisits.
-
-### Phase 4 — Three.js room generation
-- `src/render/roomBuilder.ts`: from a `rooms.json` node, build a scene: a box room sized by
-  a heuristic, **doorway openings cut at walls matching real compass exits**, up/down exits as
-  stair/hatch geometry, object billboards/sprites for items currently present (driven by live
-  object-tree contents, not just static data), region-based palette/materials/lighting.
-- `src/render/viewport.ts`: Three.js renderer, first-person camera, render to a **low-res
-  target** then upscale. On `onRoomChange`, swap to that room's scene (camera placed facing
-  the entry doorway). Light flag off + no light source = darkness (matches game).
-
-### Phase 5 — Retro pipeline (the "amazing" part)
-- `src/render/retro/` shader chunks:
-  - **Vertex snap** (quantize clip-space x/y to a low grid) — PS1 jitter.
-  - **Affine texture mapping** (`noperspective` UVs) — early-3D warping.
-  - **Color quantization to 15-bit + Bayer ordered dithering** in fragment shader.
-  - **CRT post** (EffectComposer pass): scanlines, phosphor bloom/glow, barrel curvature,
-    chromatic aberration, vignette. Same CRT treatment applied to the terminal panel for a
-    unified single-screen look.
-- Tunable `retroConfig` (resolution scale, palette depth, dither strength, CRT intensity).
-
-### Phase 6 — Polish
-- Hand-tune ~6–10 hero rooms (West of House, Living Room, Cellar, Troll Room, etc.) with
-  bespoke props/lighting over the procedural base.
-- Subtle camera idle sway; doorway transition; ambient per-region audio (optional).
-
-## Key files to create
-- `tools/parse-zil.mjs` — ZIL → `rooms.json`
-- `src/engine/zvm.ts`, `src/engine/roomState.ts`, `src/engine/introspect.ts`
-- `src/ui/terminal.ts`
-- `src/render/viewport.ts`, `src/render/roomBuilder.ts`, `src/render/retro/*`
-- `public/zork1.z3`, `public/rooms.json`
+## Phases
+- **P0 Scaffold:** Vite vanilla-ts; add `three`, `ifvms`; README; .gitignore.
+- **P1 Authentic game (text):** zvm.ts + glkBridge.ts (main window out, line input, v3 status);
+  terminal.ts (output, input, history). Save/restore/undo via Dialog shim → IndexedDB.
+  GATE: byte-identical to real Zork.
+- **P2 Map+object data:** parse-zap + parse-zil → rooms.json/objects.json with objNum joined.
+  Handle exit grammar (TO / IF..ELSE / PER / blocked-msg). region grouping for palette.
+- **P3 Live introspection:** introspect.ts reads vm.ram each turn → currentRoom, isDark,
+  contents (child/sibling walk). Emit onRoomChange. GATE: scripted walk logs correct ids.
+- **P4 Three.js rooms:** roomBuilder (box, doorways at real exits, stairs/hatch, prop sprites
+  from live contents, region palette); viewport (low-res RT, first-person cam, scene swap,
+  transitions, darkness). GATE: doorways match exits.
+- **P5 Retro pipeline:** vertex-snap, affine UV, 15-bit+Bayer dither, CRT pass (scanlines,
+  bloom, curvature, chromatic aberration, vignette); retroConfig tunables.
+- **P6 Polish:** hand-tune ~6-10 hero rooms; idle sway; transitions; optional ambient audio.
 
 ## Reuse (don't reinvent)
-- **Game engine:** `ifvms.js` ZVM — do NOT write a Z-machine.
-- **Map data:** parse from `historicalsource/zork1` ZIL — do NOT hand-author room layout.
-- **Retro shaders:** adapt established PS1/CRT shader techniques (vertex-snap, affine UVs,
-  Bayer dither, CRT pass) rather than inventing from scratch.
-
-## Risks / watch-items
-- **ZILF build** needs .NET; if it's friction, fall back to a known-good prebuilt Zork I
-  `.z3` (still MIT-sourced game) and keep the ZILF path documented.
-- **Object-table introspection** depends on ZVM exposing its memory array; if blocked, the
-  text-header parse is a workable fallback for current-room.
-- **Procedural rooms won't be literal architecture** (no canonical Zork blueprints) — they're
-  evocative, exit-accurate spaces, not floorplans. Hero rooms close the gap where it matters.
+- Engine: ifvms.js ZVM. Glk bridge: adapt minimal custom adapter.
+- Map data: parse historicalsource ZIL + generated ZAP.
+- Retro shaders: adapt established PS1/CRT techniques.
 
 ## Verification
-- **Phase 1:** side-by-side a few commands vs a reference Zork transcript — output identical.
-- **Phase 3:** scripted walk (`N`, `E`, `enter house`, `go down`…) logs correct room ids,
-  including darkness.
-- **Phase 4–5:** `npm run dev`, play through the opening (mailbox → house → cellar); confirm
-  each move swaps to a room whose doorways match the available exits and whose mood matches
-  the region. Screenshot the CRT/PS1 look.
-- Use the Chrome MCP tools to drive the running app and capture screenshots for visual review.
+- P1: side-by-side transcript identical; SAVE/RESTORE/UNDO/RESTART work.
+- P3: scripted walk logs correct ids through darkness, revisits, maze.
+- P4-5: dev play opening (mailbox→house→cellar→troll); doorways match exits; dark cellar black.
+- Drive via Chrome MCP; screenshot CRT/PS1 look.

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZORK I — Retro</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="viewport"><canvas id="gl"></canvas></div>
+      <div id="terminal">
+        <div id="output" aria-live="polite"></div>
+        <div id="prompt-line">
+          <span id="caret">&gt;</span>
+          <input id="input" type="text" autocomplete="off" autocapitalize="off"
+                 autocorrect="off" spellcheck="false" />
+        </div>
+      </div>
+    </div>
+    <!-- glkapi.js is sloppy-mode (implicit globals); must load as a classic
+         script so it can expose window.Glk. Runs before the deferred module. -->
+    <script src="./vendor/glkapi.js"></script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
