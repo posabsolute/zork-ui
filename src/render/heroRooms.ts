@@ -197,6 +197,54 @@ function heroTree(trunk: Seg, canopy: Seg, x: number, z: number, h: number) {
   }
 }
 
+/** A wavy water surface filling the floor at a given level. */
+function waterPlane(seg: Seg, hx: number, hz: number, level: number, rows = 6) {
+  for (let r = 0; r < rows; r++) {
+    const z = -hz + (2 * hz * (r + 1)) / (rows + 1);
+    let px = -hx, py = level;
+    for (let i = 1; i <= 16; i++) {
+      const nx = -hx + (2 * hx * i) / 16;
+      const ny = level + Math.sin(i * 0.9 + r) * 0.09;
+      line(seg, px, py, z, nx, ny, z);
+      px = nx; py = ny;
+    }
+  }
+}
+
+/** A bottomless chasm: a jagged near edge with lines dropping into the dark. */
+function chasmVoid(seg: Seg, x1: number, z1: number, x2: number, z2: number) {
+  let px = x1;
+  for (let i = 1; i <= 8; i++) {
+    const nx = x1 + ((x2 - x1) * i) / 8;
+    const z = z1 + (i % 2 ? 0.2 : -0.2);
+    line(seg, px, 0.02, z1, nx, 0.02, z);
+    px = nx;
+  }
+  for (let i = 0; i <= 6; i++) {
+    const x = x1 + ((x2 - x1) * i) / 6;
+    line(seg, x, 0.02, z1, x, -3, z2);
+  }
+}
+
+/** A great mirror on a wall (sheen lines), drawn in plane `m`. */
+function mirrorPanel(seg: Seg, m: Map2) {
+  rc(seg, m, -1.4, 0.3, 1.4, 2.7);
+  ln(seg, m, -1.4, 0.3, 1.4, 2.7); // diagonal sheen
+  ln(seg, m, -1.2, 0.5, 1.2, 2.5);
+}
+
+/** A shimmering rainbow arch over the room. */
+function rainbow(objs: THREE.Object3D[], z: number, r: number) {
+  const bands = [0xff5a52, 0xffa54a, 0xffe24a, 0x5dff8a, 0x5cc8ff, 0xc79bff];
+  bands.forEach((c, i) => {
+    const s: Seg = [];
+    archXY(s, 0, 0, z + i * 0.18, r + i * 0.4, r + i * 0.4);
+    const o = makeLines(s, c, 1);
+    tagMotion(o, "glow", i);
+    objs.push(o);
+  });
+}
+
 /** A great tree with low climbable branches. */
 function bigTree(trunk: Seg, canopy: Seg, x: number, z: number, h: number) {
   line(trunk, x, 0, z, x, h * 0.6, z);
@@ -710,6 +758,286 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
         o.material.transparent = true;
         o.material.opacity = 0.3 + 0.3 * Math.abs(Math.sin(t * 1.5 + o.userData.phase));
       }
+    },
+  },
+  // --- Dam & reservoir water system ----------------------------------------
+  "DAM-LOBBY": {
+    note: "Tour waiting room; doorways marked Private to N and E, path south.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [];
+      const hz = dims.D / 2, hx = dims.W / 2;
+      rectXY(a, -0.9, 0, 0.9, 2.2, -hz + 0.05); // north "Private" doorway
+      ln(a, eastWall(dims), -0.9, 0, 0.9, 2.2); // east "Private" doorway
+      for (const [x, z] of [[-1.5, 0], [1.5, 0.5]]) boxEdges(a, x, 0.45, z, 0.6, 0.9, 0.6); // benches
+      const fire: Seg = [];
+      flame(fire, hx - 0.6, -hz + 0.6, 0.5); // a guttering wall lamp
+      return [makeLines(a, palette.primary, 1), moving(makeLines(fire, FIRE_COLOR, 1), "flame")];
+    },
+  },
+  "MAINTENANCE-ROOM": {
+    note: "Ransacked control room: 4 coloured buttons, tool chest, a dripping leak.",
+    suppress: ["YELLOW-BUTTON", "BROWN-BUTTON", "RED-BUTTON", "BLUE-BUTTON", "TOOL-CHEST", "LEAK"],
+    build: ({ dims, palette }) => {
+      const a: Seg = [], leak: Seg = [];
+      const hz = dims.D / 2;
+      boxEdges(a, -1.6, 0.5, 0, 1.2, 1.0, 0.7); // tool chest
+      const cols = [0xffe24a, 0x9a6a3a, 0xff5a52, 0x5cc8ff];
+      const out: THREE.Object3D[] = [makeLines(a, palette.primary, 1)];
+      cols.forEach((c, i) => {
+        const b: Seg = [];
+        rectXY(b, 0.4 + i * 0.5 - 0.15, 1.2, 0.4 + i * 0.5 + 0.15, 1.5, -hz + 0.05);
+        out.push(makeLines(b, c, 1)); // the four coloured buttons
+      });
+      zigzag(leak, 1.8, 2.4, 0.6, 0.2, 0.05, 5); // water leaking from the wall
+      out.push(moving(makeLines(leak, WATER_COLOR, 1), "water"));
+      return out;
+    },
+  },
+  "DAM-BASE": {
+    note: "Base of the dam looming north; the Frigid River flows past the White Cliffs.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], water: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let i = 0; i <= 6; i++) line(a, -hx + (dims.W * i) / 6, 2.2, -hz + 0.1, -hx + (dims.W * i) / 6, dims.H, -hz + 0.9); // dam wall N
+      line(a, hx - 0.1, 0, -hz, hx - 0.1, dims.H, hz); // white cliff E
+      waterPlane(water, hx, hz * 0.5, 0.3, 4);
+      return [makeLines(a, palette.primary, 1), moving(makeLines(water, WATER_COLOR, 1), "water")];
+    },
+  },
+  "RESERVOIR-SOUTH": {
+    note: "South shore of the reservoir; water stretches north.",
+    build: ({ dims, palette }) => {
+      const w: Seg = [];
+      waterPlane(w, dims.W / 2, dims.D / 2, 0.25);
+      return [moving(makeLines(w, WATER_COLOR, 1), "water")];
+    },
+  },
+  "RESERVOIR": {
+    note: "On/across the reservoir — a wide body of water.",
+    build: ({ dims, palette }) => {
+      const w: Seg = [];
+      waterPlane(w, dims.W / 2, dims.D / 2, 0.3, 8);
+      return [moving(makeLines(w, WATER_COLOR, 1), "water")];
+    },
+  },
+  "RESERVOIR-NORTH": {
+    note: "North shore; an air pump sits here, stairs lead on.",
+    build: ({ dims, palette }) => {
+      const w: Seg = [];
+      waterPlane(w, dims.W / 2, dims.D / 2, 0.25);
+      return [moving(makeLines(w, WATER_COLOR, 1), "water")];
+    },
+  },
+  "STREAM-VIEW": {
+    note: "A path beside a stream flowing west to east.",
+    build: ({ dims, palette }) => {
+      const w: Seg = [], path: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let r = 0; r < 3; r++) {
+        let px = -hx, py = 0.2;
+        for (let i = 1; i <= 16; i++) { const nx = -hx + (2 * hx * i) / 16; const ny = 0.2 + Math.sin(i + r) * 0.06; line(w, px, py, hz - 1 + r * 0.4, nx, ny, hz - 1 + r * 0.4); px = nx; py = ny; }
+      }
+      line(path, -hx, 0.02, -hz + 1, hx, 0.02, -hz + 1);
+      return [makeLines(path, palette.detail, 0.6), moving(makeLines(w, WATER_COLOR, 1), "water")];
+    },
+  },
+  "IN-STREAM": {
+    note: "Afloat on the stream; a narrow beach to land on.",
+    build: ({ dims, palette }) => {
+      const w: Seg = [], beach: Seg = [];
+      waterPlane(w, dims.W / 2, dims.D / 2, 0.3, 7);
+      rectXZ(beach, dims.W / 2 - 1.4, -dims.D / 2 + 0.5, dims.W / 2 - 0.2, dims.D / 2 - 0.5, 0.05); // beach
+      return [makeLines(beach, palette.detail, 0.7), moving(makeLines(w, WATER_COLOR, 1), "water")];
+    },
+  },
+  // --- Canyon & rainbow ----------------------------------------------------
+  "CANYON-VIEW": {
+    note: "Top of the Great Canyon; the Frigid River below, a rainbow across.",
+    build: ({ dims, palette }) => {
+      const cliff: Seg = [], water: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      chasmVoid(cliff, -hx + 0.5, -hz + 0.6, hx - 0.5, hz - 0.6); // the canyon drop
+      const out: THREE.Object3D[] = [makeLines(cliff, palette.primary, 1)];
+      for (let i = 0; i < 4; i++) line(water, -hx + 1 + i, -2.5, 0, hx - 1, -2.5, 0.4 + i * 0.1); // river far below
+      out.push(moving(makeLines(water, WATER_COLOR, 0.8), "water"));
+      rainbow(out, -hz + 1, 5); // rainbow across the canyon
+      return out;
+    },
+  },
+  "CANYON-BOTTOM": {
+    note: "Beneath the canyon walls; runoff of Aragain Falls flows by, path north.",
+    build: ({ dims, palette }) => {
+      const walls: Seg = [], water: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      line(walls, -hx + 0.1, 0, -hz, -hx + 0.6, H + 3, hz); // towering walls
+      line(walls, hx - 0.1, 0, -hz, hx - 0.6, H + 3, hz);
+      waterPlane(water, hx, 1.0, 0.2, 3);
+      return [makeLines(walls, palette.primary, 1), moving(makeLines(water, WATER_COLOR, 1), "water")];
+    },
+  },
+  "CLIFF-MIDDLE": {
+    note: "A ledge halfway up the canyon wall; the falls' flow twists below.",
+    build: ({ dims, palette }) => {
+      const ledge: Seg = [], water: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      rectXZ(ledge, -hx + 0.4, -hz + 0.4, hx - 0.4, hz - 0.4, 0.02); // the ledge
+      line(ledge, -hx, 0, -hz, -hx, dims.H + 4, -hz); // wall up
+      for (let i = 0; i < 3; i++) line(water, -hx + 1, -3, i * 0.4, hx - 1, -3, i * 0.4 + 0.3);
+      return [makeLines(ledge, palette.primary, 1), moving(makeLines(water, WATER_COLOR, 0.7), "water")];
+    },
+  },
+  "ARAGAIN-FALLS": {
+    note: "The thundering Aragain Falls, a rainbow arching over the spray.",
+    build: ({ dims, palette }) => {
+      const out: THREE.Object3D[] = [];
+      const fall: Seg = [];
+      const hx = dims.W / 2;
+      for (let i = 0; i <= 10; i++) { const x = -hx + (dims.W * i) / 10; zigzag(fall, x, 3.5, -dims.D / 2 + 0.4, 0.0, 0.06, 6); } // falling water curtain
+      out.push(moving(makeLines(fall, WATER_COLOR, 1), "water"));
+      rainbow(out, -dims.D / 2 + 1, 4.5);
+      return out;
+    },
+  },
+  "END-OF-RAINBOW": {
+    note: "A rocky beach past the falls; the rainbow ends here (a pot of gold).",
+    build: ({ dims, palette }) => {
+      const beach: Seg = [], water: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      rectXZ(beach, -hx + 0.4, hz - 1.6, hx - 0.4, hz - 0.4, 0.04); // beach
+      waterPlane(water, hx, 1.0, 0.25, 3);
+      const out: THREE.Object3D[] = [makeLines(beach, palette.detail, 0.7), moving(makeLines(water, WATER_COLOR, 1), "water")];
+      rainbow(out, -hz + 1.2, 4);
+      return out;
+    },
+  },
+  // --- Central halls & curiosities -----------------------------------------
+  "DOME-ROOM": {
+    note: "A wrought-iron railing rings a dome over the Torch Room far below.",
+    suppress: ["RAILING"],
+    build: ({ dims, palette }) => {
+      const rail: Seg = [], fire: Seg = [];
+      const r = Math.min(dims.W, dims.D) / 2 - 0.8;
+      ring(rail, 0, 0, r, 0.9); // railing
+      for (let k = 0; k < 16; k++) { const t = (k / 16) * Math.PI * 2; line(rail, Math.cos(t) * r, 0, Math.sin(t) * r, Math.cos(t) * r, 0.9, Math.sin(t) * r); } // balusters
+      flame(fire, 0, 0, 0.8); // torch glimmer far below the dome
+      const fo = moving(makeLines(fire, FIRE_COLOR, 0.8), "flame");
+      fo.position.y = -4;
+      return [makeLines(rail, palette.primary, 1), fo];
+    },
+  },
+  "MIRROR-ROOM-1": {
+    note: "A great mirror fills the north wall — touch it to be elsewhere.",
+    suppress: ["MIRROR-1"],
+    build: ({ dims, palette }) => {
+      const m: Seg = [];
+      mirrorPanel(m, northWall(dims));
+      return [moving(makeLines(m, palette.accent, 1), "glow")];
+    },
+  },
+  "MIRROR-ROOM-2": {
+    note: "A great mirror fills the south wall — touch it to be elsewhere.",
+    suppress: ["MIRROR-2"],
+    build: ({ dims, palette }) => {
+      const m: Seg = [];
+      mirrorPanel(m, southWall(dims));
+      return [moving(makeLines(m, palette.accent, 1), "glow")];
+    },
+  },
+  "GALLERY": {
+    note: "An art gallery; the thieves left empty frames and one fine painting.",
+    suppress: ["PAINTING"],
+    build: ({ dims, palette }) => {
+      const frames: Seg = [], art: Seg = [];
+      const hz = dims.D / 2, hx = dims.W / 2;
+      // empty frames on the walls (paintings stolen)
+      for (let i = -1; i <= 1; i++) rectXY(frames, i * 1.3 - 0.5, 1.2, i * 1.3 + 0.5, 2.1, -hz + 0.05);
+      // the one remaining painting on the east wall
+      const m = eastWall(dims);
+      rc(art, m, -0.6, 1.2, 0.6, 2.1);
+      ln(art, m, -0.5, 1.5, 0.5, 1.8);
+      void hx;
+      return [makeLines(frames, palette.detail, 0.7), moving(makeLines(art, palette.accent, 1), "glow")];
+    },
+  },
+  "STUDIO": {
+    note: "An artist's studio splattered with 69 colours; a chimney leads up.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [];
+      const hx = dims.W / 2, H = dims.H;
+      line(a, hx - 0.5, 0, 0, hx - 0.5, H, 0); line(a, hx - 1.1, 0, 0, hx - 1.1, H, 0); line(a, hx - 0.5, H, 0, hx - 1.1, H, 0); // chimney up
+      const out: THREE.Object3D[] = [makeLines(a, palette.primary, 1)];
+      // paint splatters in many colours on the floor
+      const cols = [0xff5a52, 0xffa54a, 0xffe24a, 0x5dff8a, 0x5cc8ff, 0xc79bff, 0xffffff];
+      cols.forEach((c, i) => {
+        const s: Seg = [];
+        const ang = (i / cols.length) * Math.PI * 2;
+        diamond(s, Math.cos(ang) * 1.6, 0.03, Math.sin(ang) * 1.4, 0.12);
+        out.push(makeLines(s, c, 0.9));
+      });
+      return out;
+    },
+  },
+  "ATLANTIS-ROOM": {
+    note: "An ancient room long under water; a crystal trident, stairs up.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], caustic: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      for (let i = 0; i < 4; i++) { const y = 0.5 + i * 0.4; rectXZ(a, hx - 1.8, -hz + 0.6, hx - 0.6, -hz + 1.0 + i * 0.2, y); } // stairs up
+      waterPlane(caustic, hx, hz, H - 0.2, 5); // light caustics on the ceiling
+      return [makeLines(a, palette.primary, 1), moving(makeLines(caustic, WATER_COLOR, 0.5), "water")];
+    },
+  },
+  "EAST-OF-CHASM": {
+    note: "The east edge of a bottomless chasm; passage north, path east.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], mist: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      chasmVoid(a, -hx + 0.4, -1, hx - 0.4, 1);
+      for (let i = 0; i < 4; i++) zigzag(mist, -hx + 1.5 + i * 1.2, -1, 0, 1.2, 0.1, 4); // mist rising
+      return [makeLines(a, palette.primary, 1), moving(makeLines(mist, palette.detail, 0.5), "wisp")];
+    },
+  },
+  "CHASM-ROOM": {
+    note: "A chasm runs SW-NE; a crack opens into a passage.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], mist: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      // diagonal chasm SW-NE
+      for (let i = 0; i <= 6; i++) { const t = i / 6; line(a, -hx + t * dims.W, 0.02, hz - t * dims.D, -hx + t * dims.W, -3, hz - t * dims.D); }
+      zigzag(mist, 0, 0, 0, 1.4, 0.12, 5);
+      return [makeLines(a, palette.primary, 1), moving(makeLines(mist, palette.detail, 0.5), "wisp")];
+    },
+  },
+  "EW-PASSAGE": {
+    note: "A narrow east-west passage; a stair leads down at the north end.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], glow: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let i = 0; i < 4; i++) { const y = 0.3 + i * 0.3; rectXZ(a, -0.7, -hz + 0.5 + i * 0.2, 0.7, -hz + 0.9 + i * 0.2, y); } // stair down at north
+      diamond(glow, 0, 1.6, hz - 0.3, 0.12); // a lit niche
+      return [makeLines(a, palette.primary, 1), moving(makeLines(glow, palette.accent, 1), "glow")];
+    },
+  },
+  "ENGRAVINGS-CAVE": {
+    note: "A low cave, walls covered in ancient glowing engravings.",
+    suppress: ["ENGRAVINGS"],
+    build: ({ dims, palette }) => {
+      const a: Seg = [], eng: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      rectXZ(a, -hx, -hz, hx, hz, H - 0.4); // low ceiling
+      // engraving glyphs along the walls
+      for (let i = 0; i < 8; i++) { const x = -hx + 0.4 + i * (dims.W / 8); for (let j = 0; j < 3; j++) { const y = 0.8 + j * 0.5; line(eng, x, y, -hz + 0.05, x + 0.2, y + 0.2, -hz + 0.05); line(eng, x + 0.2, y + 0.2, -hz + 0.05, x, y + 0.4, -hz + 0.05); } }
+      return [makeLines(a, palette.primary, 1), moving(makeLines(eng, palette.accent, 1), "glow")];
+    },
+  },
+  "DEEP-CANYON": {
+    note: "A deep canyon; far below, the echo of rushing water, stairs descend.",
+    build: ({ dims, palette }) => {
+      const a: Seg = [], water: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      chasmVoid(a, -hx + 0.4, -hz + 0.6, hx - 0.4, hz - 0.6);
+      for (let i = 0; i < 3; i++) line(water, -hx + 1, -3.5, i * 0.4, hx - 1, -3.5, i * 0.4 + 0.3);
+      return [makeLines(a, palette.primary, 1), moving(makeLines(water, WATER_COLOR, 0.6), "water")];
     },
   },
 };

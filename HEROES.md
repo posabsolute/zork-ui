@@ -8,7 +8,7 @@ it. Hero specs may also define an `animate(objs, t)` hook for motion.
 To hero a room: add an entry to `HERO_ROOMS` keyed by its ZIL room id (see
 `public/rooms.json`), then tick it here.
 
-**Progress: 25 / 110** — the opening 10 rooms are all heroed and fact-checked
+**Progress: 49 / 110** — the opening 10 rooms are all heroed and fact-checked
 against the game's descriptions (boarded windows, the great climbable tree, the
 nest, trophy case, gothic wooden door, etc.). Hero rooms suppress duplicate object
 icons for furniture they draw themselves.
