@@ -29,6 +29,12 @@ export interface WebGlkOteHooks {
   onInputReady?: () => void;
   /** Fired with each line command the player submits. */
   onCommand?: (line: string) => void;
+  /**
+   * Chance to handle a command in the UI layer before it reaches the game.
+   * Return true to consume it (the game does not see it and no turn is taken).
+   * `print` writes a system message to the terminal.
+   */
+  intercept?: (line: string, print: (text: string) => void) => boolean;
 }
 
 export class WebGlkOte {
@@ -226,6 +232,11 @@ export class WebGlkOte {
           history.push(line);
           histIdx = history.length;
         }
+        // UI-layer commands (e.g. HELP) are handled here and never reach the
+        // game engine, so they don't consume a turn.
+        if (this.hooks.intercept?.(line, (t) => this.printSystem(t))) {
+          return; // keep waiting for the next line; the game hasn't moved
+        }
         this.hooks.onCommand?.(line);
         const win = this.currentInput.window;
         this.currentInput = null;
@@ -246,6 +257,16 @@ export class WebGlkOte {
 
   private gridOrBuffer(): number {
     return this.bufferWin?.id ?? this.gridWin?.id ?? 0;
+  }
+
+  /** Write a UI/system message (e.g. HELP output) to the terminal. */
+  printSystem(text: string) {
+    const block = document.createElement("div");
+    block.className = "sys";
+    block.textContent = text;
+    this.outputEl.appendChild(block);
+    this.outputEl.appendChild(document.createElement("br"));
+    this.outputEl.scrollTop = this.outputEl.scrollHeight;
   }
 
   private echoInput(line: string) {

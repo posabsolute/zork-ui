@@ -206,6 +206,52 @@ export class RoomState {
     return lit;
   }
 
+  /** Augmented help for the current room: real exits, visible objects, verbs. */
+  helpText(): string {
+    const room = this.currentId ? this.rooms[this.currentId] : null;
+    if (!room) return "No location yet — type LOOK to begin.";
+
+    const order = [
+      "NORTH", "SOUTH", "EAST", "WEST",
+      "NE", "NW", "SE", "SW",
+      "UP", "DOWN", "IN", "OUT",
+    ];
+    const abbr: Record<string, string> = {
+      NORTH: "n", SOUTH: "s", EAST: "e", WEST: "w",
+      NE: "ne", NW: "nw", SE: "se", SW: "sw",
+      UP: "u", DOWN: "d", IN: "in", OUT: "out",
+    };
+    const exits: string[] = [];
+    for (const d of order) {
+      const e = room.exits[d];
+      if (!e || e.kind === "blocked") continue;
+      const note = e.kind === "conditional" ? " (sometimes)" : "";
+      exits.push(`  ${d.toLowerCase()} (${abbr[d]})${note}`);
+    }
+
+    const objs = room.objects.map((id) => "  " + (this.objects[id]?.name ?? id.toLowerCase()));
+
+    const lines: string[] = [];
+    lines.push(`── ${room.name} ──`);
+    lines.push("");
+    lines.push("EXITS:");
+    lines.push(exits.length ? exits.join("\n") : "  (none obvious)");
+    lines.push("");
+    lines.push("YOU MIGHT SEE HERE:");
+    lines.push(objs.length ? objs.join("\n") : "  (nothing notable)");
+    lines.push("");
+    lines.push("USEFUL COMMANDS:");
+    lines.push("  look (l), examine <thing>, search");
+    lines.push("  take <thing>, drop <thing>, inventory (i)");
+    lines.push("  open / close <thing>, read <thing>");
+    lines.push("  turn on / off <thing>, move <thing>");
+    lines.push("  attack <foe> with <weapon>");
+    lines.push("  save, restore, score, again (g)");
+    lines.push("");
+    lines.push("(type a direction to travel. HELP is a guide — it doesn't take a turn.)");
+    return lines.join("\n");
+  }
+
   private resolveContents(objNum: number): string[] {
     // Map live child object numbers to ZIL ids where we can (by static room data).
     // Without a number→id map for props we fall back to the room's static objects.

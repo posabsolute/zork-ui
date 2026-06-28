@@ -30,6 +30,14 @@ async function start() {
       onStatus(left) {
         latestStatus = left;
       },
+      intercept(line, print) {
+        const cmd = line.trim().toLowerCase();
+        if (cmd === "help" || cmd === "?" || cmd === "commands" || cmd === "exits") {
+          print(rooms.helpText());
+          return true;
+        }
+        return false;
+      },
       onCommand(line) {
         rooms.noteCommand(line);
       },
