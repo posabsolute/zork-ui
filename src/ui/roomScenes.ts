@@ -127,45 +127,83 @@ function fireflies(ctx: CanvasRenderingContext2D, w: number, h: number, t: numbe
   ctx.globalAlpha = 1;
 }
 
-// Flat neon house (a glowing sign): cyan structure, magenta roof, lit windows.
-function whiteHouse(ctx: CanvasRenderingContext2D, cx: number, baseY: number, s: number, face: Face, t: number) {
-  const bw = s * 2.3, bh = s * 1.5, ov = s * 0.22, rh = s * 1.0;
-  const x0 = cx - bw / 2, x1 = cx + bw / 2, yt = baseY - bh;
-  neon(ctx, "#6cf0ff", "rgba(40,200,255,0.5)", () => rect(ctx, x0, yt, bw, bh)); // body
-  neon(ctx, "#ff5ad8", "rgba(255,70,190,0.5)", () => poly(ctx, [[x0 - ov, yt], [cx, yt - rh], [x1 + ov, yt]])); // roof
-  neon(ctx, "#ff5ad8", "rgba(255,70,190,0.4)", () => ln(ctx, cx, yt - rh, cx, yt)); // ridge accent
-  const fb = baseY, fy = yt;
-  if (face === "door") {
-    neon(ctx, "#ffc24a", "rgba(255,170,60,0.5)", () => {
-      rect(ctx, cx - s * 0.3, fb - s * 0.98, s * 0.6, s * 0.98);
-      ln(ctx, cx - s * 0.3, fb - s * 0.72, cx + s * 0.3, fb - s * 0.28);
-      ln(ctx, cx - s * 0.3, fb - s * 0.28, cx + s * 0.3, fb - s * 0.72);
-      ln(ctx, cx - s * 0.3, fb - s * 0.5, cx + s * 0.3, fb - s * 0.5);
-    }, 1.8);
-    win(ctx, x0 + s * 0.42, fy + s * 0.42, s * 0.5, t, 0);
-    win(ctx, x1 - s * 0.52, fy + s * 0.42, s * 0.5, t, 1);
-  } else if (face === "windows") {
-    for (let k = -1; k <= 1; k++) win(ctx, cx + k * s * 0.74, fy + s * 0.5, s * 0.5, t, k + 1);
-  } else {
-    win(ctx, cx - s * 0.55, fy + s * 0.5, s * 0.5, t, 0);
-    const ox = cx + s * 0.2, oy = fy + s * 0.5;
-    win(ctx, ox, oy, s * 0.5, t, 1);
-    neon(ctx, "#9be8ff", "rgba(120,200,255,0.4)", () =>
-      poly(ctx, [[ox + s * 0.5, oy], [ox + s * 0.82, oy - s * 0.12], [ox + s * 0.82, oy + s * 0.4], [ox + s * 0.5, oy + s * 0.5]]), 1.6);
+// A big soft light source with a glow pool (the homescreen's key move).
+function moonGlow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, t: number) {
+  ctx.globalCompositeOperation = "lighter";
+  const pulse = 1 + 0.04 * Math.sin(t * 0.5);
+  const halo = ctx.createRadialGradient(x, y, 0, x, y, r * 9 * pulse);
+  halo.addColorStop(0, "rgba(170,200,255,0.40)");
+  halo.addColorStop(0.12, "rgba(120,150,220,0.18)");
+  halo.addColorStop(0.4, "rgba(60,80,150,0.06)");
+  halo.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 9 * pulse, 0, Math.PI * 2); ctx.fill();
+  F(ctx, "#eaf0ff", 30); dot(ctx, x, y, r);
+  ctx.shadowBlur = 0; ctx.fillStyle = "rgba(8,12,28,0.5)"; dot(ctx, x + r * 0.35, y - r * 0.3, r * 0.7);
+}
+// Heavy drifting mist (atmosphere) low in the frame.
+function mist(ctx: CanvasRenderingContext2D, w: number, y: number, t: number, tint = "rgba(90,120,170,0.10)") {
+  ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 5; i++) {
+    const x = ((t * (8 + i * 5) + i * 420) % (w + 600)) - 300;
+    const yy = y + Math.sin(i) * 18;
+    const g = ctx.createRadialGradient(x, yy, 0, x, yy, 260);
+    g.addColorStop(0, tint); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, yy, 260, 30, 0, 0, Math.PI * 2); ctx.fill();
   }
 }
-function win(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, t: number, i: number) {
-  // a buzzing neon window that occasionally flickers
-  const flick = Math.sin(t * 9 + i * 2) > 0.92 ? 0.3 : 1;
+
+// The white house as a moonlit SILHOUETTE: dark mass, cool rim-light, one warm window.
+function whiteHouse(ctx: CanvasRenderingContext2D, cx: number, baseY: number, s: number, face: Face, t: number) {
+  const bw = s * 2.3, bh = s * 1.4, ov = s * 0.26, rh = s * 0.9;
+  const x0 = cx - bw / 2, x1 = cx + bw / 2, yt = baseY - bh, chx = cx + bw * 0.22, chy = yt - rh * 0.55;
+  // 1) dark silhouette fill (occludes the glow behind, reads as a solid mass)
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = "#080a12";
+  ctx.beginPath();
+  ctx.moveTo(x0, baseY); ctx.lineTo(x0, yt); ctx.lineTo(x0 - ov, yt);
+  ctx.lineTo(cx, yt - rh); ctx.lineTo(x1 + ov, yt); ctx.lineTo(x1, yt);
+  ctx.lineTo(x1, baseY); ctx.closePath(); ctx.fill();
+  ctx.fillRect(chx, chy, s * 0.3, rh * 0.6); // chimney
+  // 2) cool moonlit rim-light on the edges
   ctx.globalCompositeOperation = "lighter";
-  const g = ctx.createLinearGradient(x, y, x, y + s);
-  g.addColorStop(0, `rgba(120,235,255,${0.32 * flick})`); g.addColorStop(1, `rgba(40,120,200,${0.1 * flick})`);
-  ctx.fillStyle = g; ctx.fillRect(x, y, s, s); // glowing pane fill
-  neon(ctx, `rgba(180,245,255,${flick})`, "rgba(120,200,255,0.4)", () => {
-    rect(ctx, x, y, s, s);
-    ln(ctx, x + s / 2, y, x + s / 2, y + s);
-    ln(ctx, x, y + s / 2, x + s, y + s / 2);
-  }, 1.6);
+  S(ctx, "rgba(150,180,235,0.65)", 1.6, 10);
+  poly(ctx, [[x0 - ov, yt], [cx, yt - rh], [x1 + ov, yt]]); // roof
+  ln(ctx, x0, yt, x0, baseY); ln(ctx, x1, yt, x1, baseY); ln(ctx, x0, yt, x1, yt); // walls
+  rect(ctx, chx, chy, s * 0.3, rh * 0.6); // chimney rim
+  // 3) features — boarded door, and ONE warm-lit window (the focal warmth)
+  const fb = baseY;
+  if (face === "door") {
+    S(ctx, "rgba(180,150,120,0.5)", 1.4, 6); // weathered boarded door
+    rect(ctx, cx - s * 0.28, fb - s * 0.9, s * 0.56, s * 0.9);
+    ln(ctx, cx - s * 0.28, fb - s * 0.66, cx + s * 0.28, fb - s * 0.26);
+    ln(ctx, cx - s * 0.28, fb - s * 0.26, cx + s * 0.28, fb - s * 0.66);
+    warmWindow(ctx, x0 + s * 0.45, yt + s * 0.4, s * 0.42, t, true);
+    coolWindow(ctx, x1 - s * 0.5, yt + s * 0.4, s * 0.42);
+  } else if (face === "windows") {
+    for (let k = -1; k <= 1; k++) coolWindow(ctx, cx + k * s * 0.72, yt + s * 0.45, s * 0.42, true);
+  } else {
+    coolWindow(ctx, cx - s * 0.55, yt + s * 0.45, s * 0.42);
+    warmWindow(ctx, cx + s * 0.18, yt + s * 0.45, s * 0.42, t, false, true);
+  }
+}
+function coolWindow(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, boarded = false) {
+  S(ctx, "rgba(150,180,235,0.55)", 1.3, 6);
+  rect(ctx, x, y, s, s);
+  if (boarded) { ln(ctx, x, y + s * 0.33, x + s, y + s * 0.33); ln(ctx, x, y + s * 0.66, x + s, y + s * 0.66); }
+  else { ln(ctx, x + s / 2, y, x + s / 2, y + s); ln(ctx, x, y + s / 2, x + s, y + s / 2); }
+}
+function warmWindow(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, t: number, boarded = false, ajar = false) {
+  // a faint warm glow leaking through — the focal warmth against the cold dark
+  const flick = 0.7 + 0.3 * Math.abs(Math.sin(t * 3) + 0.4 * Math.sin(t * 7));
+  ctx.globalCompositeOperation = "lighter";
+  const g = ctx.createRadialGradient(x + s / 2, y + s / 2, 0, x + s / 2, y + s / 2, s * 1.6);
+  g.addColorStop(0, `rgba(255,200,120,${0.5 * flick})`); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.fillRect(x - s, y - s, s * 3, s * 3);
+  S(ctx, `rgba(255,210,140,${0.8 * flick})`, 1.4, 8);
+  rect(ctx, x, y, s, s);
+  if (boarded) { ln(ctx, x, y + s * 0.4, x + s, y + s * 0.4); }
+  else { ln(ctx, x + s / 2, y, x + s / 2, y + s); }
+  if (ajar) { S(ctx, "rgba(255,220,160,0.6)", 1.4, 8); poly(ctx, [[x + s, y], [x + s * 1.4, y - s * 0.15], [x + s * 1.4, y + s * 0.6], [x + s, y + s]]); }
 }
 // Vertically-mirrored, faint, wavy reflection (wet-ground cyberpunk look).
 function reflect(ctx: CanvasRenderingContext2D, axisY: number, alpha: number, drawFn: () => void) {
@@ -262,37 +300,25 @@ function room(ctx: CanvasRenderingContext2D, w: number, h: number, color: string
 // ===========================================================================
 const SCENES: Record<string, SceneDraw> = {
   "WEST-OF-HOUSE": (ctx, w, h, t) => {
-    bg(ctx, w, h, "#0b0726", "#05030f");
-    const hz = h * 0.6, u = Math.min(w, h);
-    // magenta city-glow on the horizon
-    ctx.globalCompositeOperation = "lighter";
-    const hg = ctx.createLinearGradient(0, hz - h * 0.35, 0, hz);
-    hg.addColorStop(0, "rgba(0,0,0,0)"); hg.addColorStop(1, "rgba(180,40,140,0.22)");
-    ctx.fillStyle = hg; ctx.fillRect(0, hz - h * 0.35, w, h * 0.35);
-    stars(ctx, w, hz - h * 0.1, t, 40);
-    clouds(ctx, w, h * 0.6, t);
-    treeline(ctx, w, hz, "#5a2a7a");
-    const hx = w * 0.58, mx = w * 0.3, my = hz + (h - hz) * 0.32;
-    // horizon line
-    S(ctx, "#ff5ad8", 2, 12); ln(ctx, 0, hz, w, hz);
-    // the neon house + mailbox
-    whiteHouse(ctx, hx, hz, u * 0.15, "door", t);
-    mailbox(ctx, mx, my, u * 0.05, t);
-    // a dark foreground rise with a faint neon rim, to frame the bottom
+    bg(ctx, w, h, "#05060f", "#010208"); // deep night
+    const hz = h * 0.66, u = Math.min(w, h);
+    // the moon: the single key light + its glow pool (upper left)
+    moonGlow(ctx, w * 0.24, h * 0.26, u * 0.045, t);
+    stars(ctx, w, hz - h * 0.05, t, 34);
+    // a distant, dim treeline (atmospheric perspective)
+    treeline(ctx, w, hz, "rgba(70,110,90,0.5)");
+    // dark ground
     ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "#04030a";
-    ctx.beginPath();
-    ctx.moveTo(0, h);
-    for (let x = 0; x <= w; x += w / 16) ctx.lineTo(x, h - (h - hz) * 0.28 - Math.sin(x * 0.01) * 10);
-    ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#03050a"; ctx.fillRect(0, hz, w, h - hz);
     ctx.globalCompositeOperation = "lighter";
-    S(ctx, "rgba(255,90,200,0.5)", 1.5, 8);
-    ctx.beginPath();
-    for (let x = 0; x <= w; x += w / 16) { const y = h - (h - hz) * 0.28 - Math.sin(x * 0.01) * 10; x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
-    ctx.stroke();
-    fireflies(ctx, w, hz, t, 8, "#ff9ad8");
-    rain(ctx, w, h, t);
-    fog(ctx, w, hz + (h - hz) * 0.45, t);
+    // the moonlit house silhouette, set into the night, off-centre
+    whiteHouse(ctx, w * 0.62, hz, u * 0.16, "door", t);
+    // the mailbox, a small dark silhouette in the field
+    mailbox(ctx, w * 0.32, hz + (h - hz) * 0.34, u * 0.05, t);
+    // heavy mist hugging the ground (the atmosphere)
+    mist(ctx, w, hz + (h - hz) * 0.18, t);
+    mist(ctx, w, hz + (h - hz) * 0.5, t * 1.3);
+    rain(ctx, w, h, t, 60);
   },
   "NORTH-OF-HOUSE": (ctx, w, h, t) => {
     bg(ctx, w, h);
