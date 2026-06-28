@@ -205,6 +205,152 @@ function surface(corners: V3[], color: number): THREE.Mesh {
   return new THREE.Mesh(geo, mat);
 }
 
+/** A glowing additive polygon (water sheet, etc.). */
+function glowPoly(corners: V3[], color: number, opacity = 0.35): THREE.Mesh {
+  const geo = new THREE.BufferGeometry();
+  const pos: number[] = [], idx: number[] = [];
+  for (const c of corners) pos.push(c[0], c[1], c[2]);
+  for (let i = 1; i < corners.length - 1; i++) idx.push(0, i, i + 1);
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false,
+  }));
+}
+
+/**
+ * Reusable landscape composer (the Canyon-View lesson, generalised): layered
+ * silhouettes + one focal body of water + a framing foreground, as real
+ * occluding 3D with neon edges. Restraint over clutter.
+ */
+interface LandOpts {
+  note: string;
+  ridge?: "mountains" | "cliffs" | "forest" | "none";
+  water?: "river" | "lake" | "none";
+  rainbow?: boolean;
+  falls?: boolean;
+  atWater?: boolean; // camera at water level (beach/boat) vs. perched on a rim
+  ground?: number;
+  suppress?: string[];
+}
+function landscape(o: LandOpts): HeroSpec {
+  const ridge = o.ridge ?? "mountains";
+  const water = o.water ?? "none";
+  const RIDGE = -28;
+  const camera: HeroSpec["camera"] = o.atWater
+    ? { pos: [0, 1.1, 9], look: [0, -0.4, -16] }
+    : { pos: [0, 2.2, 8], look: [0, -1.6, -16] };
+  return {
+    note: o.note,
+    camera,
+    suppress: o.suppress,
+    build: () => {
+      const out: THREE.Object3D[] = [];
+      const FLOORY = o.atWater ? -1.2 : -4;
+
+      // far ridge silhouette + glowing edge
+      if (ridge !== "none") {
+        const peaks: V3[] = [];
+        for (let x = -34; x <= 34; x += 2.5) {
+          const h = ridge === "mountains"
+            ? 3 + Math.abs(Math.sin(x * 0.45)) * 5.5 + Math.cos(x * 0.2) * 1.5
+            : ridge === "cliffs"
+              ? 4 + Math.sin(x * 0.35) * 0.7 + Math.cos(x * 0.13) * 0.5
+              : 2 + Math.abs(Math.sin(x * 0.7)) * 2.2;
+          peaks.push([x, h, RIDGE]);
+        }
+        out.push(surface([[-34, -16, RIDGE], ...peaks, [34, -16, RIDGE]], 0x0d1019));
+        const e: Seg = [];
+        for (let i = 0; i < peaks.length - 1; i++) line(e, peaks[i][0], peaks[i][1], RIDGE, peaks[i + 1][0], peaks[i + 1][1], RIDGE);
+        out.push(makeLines(e, ridge === "cliffs" ? 0xbfe0ff : ridge === "forest" ? 0x5dff8a : 0x6fb8e6, 0.85));
+      }
+
+      // ground
+      out.push(surface([[-34, FLOORY, 4], [34, FLOORY, 4], [34, FLOORY, RIDGE], [-34, FLOORY, RIDGE]], o.ground ?? 0x0a0b11));
+
+      // water
+      if (water === "river") {
+        const wy = FLOORY + 0.05;
+        const thread: Seg = [];
+        let pp: V3 | null = null;
+        const pos: number[] = [], idx: number[] = []; let vi = 0;
+        const N = 30;
+        for (let i = 0; i <= N; i++) {
+          const t = i / N, z = 4 - t * (4 - (RIDGE + 2));
+          const x = Math.sin(t * 3.6 + 0.5) * 4.5 * (1 - t * 0.45);
+          const w = 1.3 * (1 - t * 0.55) + 0.3;
+          pos.push(x - w, wy, z, x + w, wy, z);
+          if (i > 0) { const a = vi - 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+          vi += 2;
+          const p: V3 = [x, wy + 0.02, z];
+          if (pp) line(thread, pp[0], pp[1], pp[2], p[0], p[1], p[2]);
+          pp = p;
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+        geo.setIndex(idx);
+        const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x2ad8ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }));
+        tagMotion(m, "glow", 0);
+        out.push(m);
+        out.push(makeLines(thread, 0x9bf0ff, 1));
+      } else if (water === "lake") {
+        const wy = FLOORY + 0.05;
+        out.push(glowPoly([[-30, wy, 4], [30, wy, 4], [22, wy, RIDGE + 1.5], [-22, wy, RIDGE + 1.5]], 0x1aa6d8, 0.3));
+        const rip: Seg = [];
+        for (let zi = 0; zi < 7; zi++) {
+          const z = 3 - zi * 4.4;
+          let px = -26;
+          for (let x = -24; x <= 26; x += 4) { line(rip, px, wy + 0.02, z + Math.sin(px * 0.3) * 0.12, x, wy + 0.02, z + Math.sin(x * 0.3 + 1) * 0.12); px = x; }
+        }
+        out.push(moving(makeLines(rip, 0x6bdcff, 0.5), "water"));
+        const far: Seg = []; line(far, -22, wy, RIDGE + 1.5, 22, wy, RIDGE + 1.5);
+        out.push(makeLines(far, 0x9bf0ff, 1)); // bright waterline at the cliff base
+      }
+
+      // foreground: a framing rim (vista) or a near bank (at water)
+      if (!o.atWater) {
+        out.push(surface([[-34, 0.7, 5.5], [34, 0.7, 5.5], [34, FLOORY, 4], [-34, FLOORY, 4]], 0x16120c));
+        const r: Seg = [];
+        for (let x = -34; x <= 34; x += 2) line(r, x, 0.7 + Math.sin(x * 1.3) * 0.12, 5.5, x + 2, 0.7 + Math.sin((x + 2) * 1.3) * 0.12, 5.5);
+        out.push(makeLines(r, 0xffc878, 1));
+      } else {
+        const r: Seg = [];
+        for (let x = -34; x <= 34; x += 2) line(r, x, FLOORY + 0.06, 5, x + 2, FLOORY + 0.06, 5);
+        out.push(makeLines(r, 0xffc878, 0.7));
+      }
+
+      // a waterfall curtain at the ridge base, centre
+      if (o.falls) {
+        const fz = RIDGE + 1.5;
+        out.push(surface([[-3, FLOORY, fz - 0.3], [-3, 4, fz - 0.3], [3, 4, fz - 0.3], [3, FLOORY, fz - 0.3]], 0x081018));
+        const fmesh = ribbon([[0, 4, fz], [0, FLOORY + 0.1, fz]], 2.6, 0x9be8ff, 0.6);
+        tagMotion(fmesh, "glow", 1);
+        out.push(fmesh);
+      }
+
+      // one quiet rainbow arc near the ridge
+      if (o.rainbow) {
+        const bands = [0xff5a52, 0xffa54a, 0xffe24a, 0x5dff8a, 0x5cc8ff, 0xc79bff];
+        bands.forEach((c, bi) => {
+          const s: Seg = [];
+          const r = 6 + bi * 0.5, cx = -13, cy = FLOORY + 1.5;
+          let first = true, lx = 0, ly = 0;
+          for (let a = 0; a <= Math.PI; a += Math.PI / 18) {
+            const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * (r * 1.1);
+            if (!first) line(s, lx, ly, RIDGE + 2, x, y, RIDGE + 2);
+            lx = x; ly = y; first = false;
+          }
+          const oo = makeLines(s, c, 0.75);
+          tagMotion(oo, "glow", bi);
+          out.push(oo);
+        });
+      }
+
+      return out;
+    },
+  };
+}
+
 /** A glowing flat ribbon following a centreline on the floor (a river). */
 function ribbon(centre: V3[], width: number, color: number, opacity = 0.55): THREE.Mesh {
   const pos: number[] = [], idx: number[] = [];
@@ -894,81 +1040,81 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
     // Spatial layout (camera on the WEST rim, looking EAST across the gorge):
     //   +X = east (across canyon)   -Z = north (upstream)   +Y = up
     //   rim at x≈0, canyon floor y≈-12, east wall (cliffs) x≈18, falls at north.
-    camera: { pos: [-2.4, 2.6, 0], look: [11, -5.5, -1.5] }, // perched on the rim, gazing down into the gorge
+    // Restraint: layered silhouettes + one focal river. Camera looks north
+    // (-Z) across the canyon; the river leads the eye to a far ridge.
+    camera: { pos: [0, 2.2, 8], look: [0, -1.6, -16] },
     build: () => {
       const out: THREE.Object3D[] = [];
-      const FLOOR = -9, EAST = 17;
-      const NZ = -20, PZ = 20; // canyon runs north–south
+      const FLOORY = -4;
+      const RIDGE = -28;
 
-      // === Solid terrain (occluding, lit) — gives the scene real 3D form ===
-      // ground I stand on (rim at x=0)
-      out.push(surface([[-7, 0, NZ], [0, 0, NZ], [0, 0, PZ], [-7, 0, PZ]], 0x2c2418));
-      // the west wall dropping from the rim into the gorge (in shadow)
-      out.push(surface([[0, 0, NZ], [2.5, FLOOR, NZ], [2.5, FLOOR, PZ], [0, 0, PZ]], 0x14110b));
-      // canyon floor
-      out.push(surface([[2.5, FLOOR, NZ], [EAST, FLOOR, NZ], [EAST, FLOOR, PZ], [2.5, FLOOR, PZ]], 0x0e0b07));
-      // the far east wall — the White Cliffs (faces west, catches the light)
-      out.push(surface([[EAST, FLOOR, NZ], [EAST, 5, NZ], [EAST, 5, PZ], [EAST, FLOOR, PZ]], 0x46586e));
-      // the Flathead Mountains rising behind the cliffs
+      // --- FAR: the canyon's far wall + mountains, as one dark silhouette ---
       const peaks: V3[] = [];
-      for (let z = NZ; z <= PZ; z += 3) peaks.push([EAST + 4, 5 + Math.abs(Math.sin(z * 0.5)) * 8 + Math.cos(z * 0.3) * 2, z]);
-      const mtnTop: V3[] = [[EAST + 4, 5, PZ], ...peaks.slice().reverse(), [EAST + 4, 5, NZ]];
-      out.push(surface(mtnTop, 0x222d42));
+      for (let x = -34; x <= 34; x += 2.5) peaks.push([x, 3 + Math.abs(Math.sin(x * 0.45)) * 5.5 + Math.cos(x * 0.2) * 1.5, RIDGE]);
+      out.push(surface([[-34, -14, RIDGE], ...peaks, [34, -14, RIDGE]], 0x0d1019)); // blocks the sky below the ridgeline
+      const ridgeEdge: Seg = [];
+      for (let i = 0; i < peaks.length - 1; i++) line(ridgeEdge, peaks[i][0], peaks[i][1], RIDGE, peaks[i + 1][0], peaks[i + 1][1], RIDGE);
+      out.push(makeLines(ridgeEdge, 0x6fb8e6, 0.85)); // glowing ridgeline
 
-      // === Glowing neon edges (the vector accent on the solid forms) ===
-      const rimEdge: Seg = [];
-      for (let z = NZ; z <= PZ; z += 1) line(rimEdge, 0, Math.sin(z * 1.7) * 0.12, z - 1, 0, Math.sin((z + 1) * 1.7) * 0.12, z);
-      out.push(makeLines(rimEdge, 0xffcf8a, 1)); // warm rim under my feet
+      // --- MID: the canyon floor (dark, lit so the river glows on it) ---
+      out.push(surface([[-34, FLOORY, 3], [34, FLOORY, 3], [34, FLOORY, RIDGE], [-34, FLOORY, RIDGE]], 0x090a10));
 
-      const cliffTop: Seg = [];
-      for (let z = NZ; z <= PZ; z += 1) line(cliffTop, EAST, 5 + Math.sin(z * 0.8) * 0.3, z - 1, EAST, 5 + Math.sin((z + 1) * 0.8) * 0.3, z);
-      out.push(makeLines(cliffTop, 0xcfeaff, 1)); // glowing clifftop edge
-      const ridge: Seg = [];
-      for (let i = 0; i < peaks.length - 1; i++) line(ridge, peaks[i][0], peaks[i][1], peaks[i][2], peaks[i + 1][0], peaks[i + 1][1], peaks[i + 1][2]);
-      out.push(makeLines(ridge, 0x8fa6c8, 0.7)); // mountain ridge silhouette
-
-      // === The Frigid River — the hero of the view: a bright ribbon winding
-      // the canyon floor, with glowing banks so it reads clearly from above ===
-      const centre: V3[] = [];
-      for (let z = NZ + 2; z <= PZ; z += 1.2) centre.push([10 + Math.sin(z * 0.4) * 2.8, FLOOR + 0.06, z]);
-      const riverMesh = ribbon(centre, 1.7, 0x2ad8ff, 0.85);
-      tagMotion(riverMesh, "glow", 0);
-      out.push(riverMesh);
-      const banks: Seg = [];
-      for (let i = 0; i < centre.length - 1; i++) {
-        for (const s of [-1.7, 1.7]) {
-          line(banks, centre[i][0] + s, FLOOR + 0.07, centre[i][2], centre[i + 1][0] + s, FLOOR + 0.07, centre[i + 1][2]);
-        }
+      // --- HERO: the Frigid River, a tapered glowing ribbon winding away ---
+      const pos: number[] = [], idx: number[] = [];
+      const N = 30;
+      let vi = 0;
+      for (let i = 0; i <= N; i++) {
+        const t = i / N; // 0 near (at the rim) .. 1 far (the ridge base)
+        const z = 4 - t * (4 - (RIDGE + 2)); // flows the full length of the canyon
+        const x = Math.sin(t * 3.6 + 0.5) * 4.5 * (1 - t * 0.45); // gentle continuous meander
+        const w = 1.3 * (1 - t * 0.55) + 0.3; // wide near, thin far = depth
+        pos.push(x - w, FLOORY + 0.05, z, x + w, FLOORY + 0.05, z);
+        if (i > 0) { const a = vi - 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+        vi += 2;
       }
-      out.push(makeLines(banks, 0x9bf0ff, 1)); // bright banks
+      const rgeo = new THREE.BufferGeometry();
+      rgeo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      rgeo.setIndex(idx);
+      const rmesh = new THREE.Mesh(
+        rgeo,
+        new THREE.MeshBasicMaterial({ color: 0x2ad8ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false })
+      );
+      tagMotion(rmesh, "glow", 0);
+      out.push(rmesh);
+      // a bright centreline thread, so the river reads continuously to the horizon
+      const thread: Seg = [];
+      let pp: V3 | null = null;
+      for (let i = 0; i <= N; i++) {
+        const t = i / N;
+        const z = 4 - t * (4 - (RIDGE + 2));
+        const x = Math.sin(t * 3.6 + 0.5) * 4.5 * (1 - t * 0.45);
+        const p: V3 = [x, FLOORY + 0.07, z];
+        if (pp) line(thread, pp[0], pp[1], pp[2], p[0], p[1], p[2]);
+        pp = p;
+      }
+      out.push(makeLines(thread, 0x9bf0ff, 1));
 
-      // === Aragain Falls + dark cavern + rainbow, upstream to the north ===
-      const cz = -18;
-      out.push(surface([[8, FLOOR, cz - 0.2], [8, FLOOR + 3, cz - 0.2], [13, FLOOR + 3, cz - 0.2], [13, FLOOR, cz - 0.2]], 0x0a1018)); // dark cavern mouth
-      const fallsMesh = ribbon([[10.5, FLOOR + 3, cz], [10.5, FLOOR + 0.1, cz]], 2.4, 0x9be8ff, 0.55);
-      tagMotion(fallsMesh, "glow", 1);
-      out.push(fallsMesh);
+      // --- NEAR: the rim I stand behind, framing the foreground ---
+      out.push(surface([[-34, 0.7, 5], [34, 0.7, 5], [34, FLOORY, 3], [-34, FLOORY, 3]], 0x16120c));
+      const rim: Seg = [];
+      for (let x = -34; x <= 34; x += 2) line(rim, x, 0.7 + Math.sin(x * 1.3) * 0.12, 5, x + 2, 0.7 + Math.sin((x + 2) * 1.3) * 0.12, 5);
+      out.push(makeLines(rim, 0xffc878, 1)); // warm rim edge
 
+      // --- one quiet rainbow arc near the ridge, far left ---
       const bands = [0xff5a52, 0xffa54a, 0xffe24a, 0x5dff8a, 0x5cc8ff, 0xc79bff];
       bands.forEach((c, bi) => {
         const s: Seg = [];
-        const r = 7.5 + bi * 0.5, cy = FLOOR + 1, cxr = 10.5;
+        const r = 6 + bi * 0.5, cx = -16, cy = -2;
         let first = true, lx = 0, ly = 0;
         for (let a = 0; a <= Math.PI; a += Math.PI / 18) {
-          const x = cxr - Math.cos(a) * r, y = cy + Math.sin(a) * (r * 1.05);
-          if (!first) line(s, lx, ly, cz - 1, x, y, cz - 1);
+          const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * (r * 1.1);
+          if (!first) line(s, lx, ly, RIDGE + 1, x, y, RIDGE + 1);
           lx = x; ly = y; first = false;
         }
-        const o = makeLines(s, c, 0.85);
+        const o = makeLines(s, c, 0.7);
         tagMotion(o, "glow", bi);
         out.push(o);
       });
-
-      // === Forest framing the rim (glowing trees, near) ===
-      const trunks: Seg = [], leaves: Seg = [];
-      for (const [x, z] of [[-1.5, -8], [-2, 8], [-1, -11]] as const) heroTree(trunks, leaves, x, z, 3.2);
-      out.push(makeLines(trunks, 0x3f8a4a, 1));
-      out.push(makeLines(leaves, 0x6bffa0, 1));
 
       return out;
     },
@@ -1484,6 +1630,28 @@ HERO_ROOMS["GRATING-ROOM"] = {
 for (let i = 1; i <= 5; i++) HERO_ROOMS[`DEAD-END-${i}`] = deadEndHero();
 for (let i = 1; i <= 5; i++) HERO_ROOMS[`RIVER-${i}`] = riverHero();
 for (let i = 1; i <= 4; i++) HERO_ROOMS[`MINE-${i}`] = coalMineHero();
+
+// === Redo the outdoor landscape rooms with the composer (real 3D vistas) ===
+Object.assign(HERO_ROOMS, {
+  "CANYON-BOTTOM": landscape({ note: "Beneath the canyon walls; the runoff of Aragain Falls flows by, a path north.", ridge: "cliffs", water: "river", atWater: true }),
+  "CLIFF-MIDDLE": landscape({ note: "A ledge halfway up the canyon wall; the river twists far below.", ridge: "cliffs", water: "river" }),
+  "ARAGAIN-FALLS": landscape({ note: "The thundering Aragain Falls, a rainbow over the spray.", ridge: "cliffs", water: "lake", falls: true, rainbow: true, atWater: true }),
+  "END-OF-RAINBOW": landscape({ note: "A rocky beach past the falls; the rainbow ends here (a pot of gold).", ridge: "cliffs", water: "lake", rainbow: true, atWater: true }),
+  "DAM-BASE": landscape({ note: "The base of the dam; the Frigid River flows past the White Cliffs.", ridge: "cliffs", water: "lake", atWater: true }),
+  "RESERVOIR-SOUTH": landscape({ note: "The south shore of the reservoir; water stretches north.", ridge: "mountains", water: "lake", atWater: true }),
+  "RESERVOIR": landscape({ note: "Out on the wide reservoir.", ridge: "mountains", water: "lake", atWater: true }),
+  "RESERVOIR-NORTH": landscape({ note: "The north shore of the reservoir; an air pump sits here.", ridge: "mountains", water: "lake", atWater: true }),
+  "STREAM-VIEW": landscape({ note: "A path beside a gently flowing stream.", ridge: "forest", water: "river", atWater: true }),
+  "IN-STREAM": landscape({ note: "Afloat on the stream; a narrow beach to land on.", ridge: "forest", water: "lake", atWater: true }),
+  "SHORE": landscape({ note: "The river shore; water laps at the bank.", ridge: "none", water: "lake", atWater: true, ground: 0x2a2418 }),
+  "SANDY-BEACH": landscape({ note: "A sandy beach beside the river (something is buried here).", ridge: "none", water: "lake", atWater: true, ground: 0x2a2418 }),
+  "WHITE-CLIFFS-NORTH": landscape({ note: "A narrow ledge along the sheer White Cliffs; the river below.", ridge: "cliffs", water: "river", atWater: true }),
+  "WHITE-CLIFFS-SOUTH": landscape({ note: "A narrow ledge along the sheer White Cliffs; the river below.", ridge: "cliffs", water: "river", atWater: true }),
+  "DEEP-CANYON": landscape({ note: "A deep canyon; far below, the echo of rushing water; stairs descend.", ridge: "cliffs", water: "river" }),
+});
+for (let i = 1; i <= 5; i++) {
+  HERO_ROOMS[`RIVER-${i}`] = landscape({ note: "Adrift on the Frigid River, between the canyon walls.", ridge: "cliffs", water: "lake", atWater: true });
+}
 
 export function getHero(id: string): HeroSpec | undefined {
   return HERO_ROOMS[id];
