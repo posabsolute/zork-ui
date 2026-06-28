@@ -70,20 +70,22 @@ export function makeLines(positions: Seg, color: number, opacity = 1): THREE.Lin
   return new THREE.LineSegments(geo, mat);
 }
 
-export function makeLabel(text: string, color: number, pos: THREE.Vector3): THREE.Sprite {
+export function makeLabel(text: string, color: number, pos: THREE.Vector3, scale = 1): THREE.Sprite {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 48;
   const ctx = canvas.getContext("2d")!;
-  ctx.font = "bold 26px 'Courier New', monospace";
+  ctx.font = "bold 24px 'Courier New', monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
   ctx.fillText(text.replace(/-/g, " ").toLowerCase(), 128, 26);
   const tex = new THREE.CanvasTexture(canvas);
   tex.magFilter = THREE.NearestFilter;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
-  sprite.scale.set(2.6, 0.5, 1);
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })
+  );
+  sprite.scale.set(2.0 * scale, 0.38 * scale, 1);
   sprite.position.copy(pos);
   return sprite;
 }

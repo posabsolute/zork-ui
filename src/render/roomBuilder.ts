@@ -10,10 +10,12 @@ import * as THREE from "three";
 import type { Room } from "../engine/roomState.ts";
 import { vectorColor } from "../config/regions.ts";
 import {
-  type Seg, line, rectXZ, makeLines, makeLabel, diamond,
+  type Seg, line, rectXZ, makeLines, makeLabel,
   hashStr, mulberry32,
 } from "./lineKit.ts";
 import { decorateRoom } from "./decor.ts";
+import { buildObjectIcon } from "./objectIcons.ts";
+import { getHero } from "./heroRooms.ts";
 
 const CARDINAL: Record<string, THREE.Vector2> = {
   NORTH: new THREE.Vector2(0, -1),
@@ -29,7 +31,8 @@ export interface BuiltRoom {
 
 export function buildRoom(room: Room): BuiltRoom {
   const group = new THREE.Group();
-  const color = vectorColor(room.region);
+  const hero = getHero(room.id);
+  const color = hero?.palette ?? vectorColor(room.region);
   const dimColor = new THREE.Color(color).multiplyScalar(0.45).getHex();
   const rng = mulberry32(hashStr(room.id));
 
@@ -96,20 +99,16 @@ export function buildRoom(room: Room): BuiltRoom {
   group.add(makeLines(grid, dimColor, 0.55));
   group.add(makeLines(portal, color, 1));
 
-  // Region atmosphere.
-  for (const o of decorateRoom(room, color, { W, H, D }, rng)) group.add(o);
+  // Hero rooms override procedural atmosphere with hand-authored geometry.
+  if (hero) {
+    for (const o of hero.build({ dims: { W, H, D }, color, rng })) group.add(o);
+  } else {
+    for (const o of decorateRoom(room, color, { W, H, D }, rng)) group.add(o);
+  }
 
-  // Object markers.
-  room.objects.forEach((id, i) => {
-    const angle = (i / Math.max(1, room.objects.length)) * Math.PI * 2 + rng();
-    const r = Math.min(W, D) / 2 - 1.8;
-    const px = Math.cos(angle) * r;
-    const pz = Math.sin(angle) * r;
-    const dia: Seg = [];
-    diamond(dia, px, 1.0, pz, 0.35);
-    group.add(makeLines(dia, color, 1));
-    group.add(makeLabel(id, color, new THREE.Vector3(px, 1.7, pz)));
-  });
+  // Object icons, placed where they belong (floor items on the floor, fixtures
+  // on walls) rather than floating in a ring.
+  placeObjects(group, room, color, { W, H, D }, doorDirs);
 
   const entryFacing = (dir?: string) => {
     const back = oppositeCardinal(dir);
@@ -120,6 +119,62 @@ export function buildRoom(room: Room): BuiltRoom {
   };
 
   return { group, entryFacing };
+}
+
+function placeObjects(
+  group: THREE.Group,
+  room: Room,
+  color: number,
+  dim: { W: number; H: number; D: number },
+  doorDirs: Set<string>
+) {
+  const hx = dim.W / 2,
+    hz = dim.D / 2;
+  // Prefer walls without a doorway for mounting fixtures.
+  const wallOrder = ["NORTH", "EAST", "WEST", "SOUTH"].sort(
+    (a, b) => (doorDirs.has(a) ? 1 : 0) - (doorDirs.has(b) ? 1 : 0)
+  );
+  const wallCount = new Map<string, number>();
+  let wallTurn = 0;
+
+  const sx = dim.W * 0.3,
+    sz = dim.D * 0.3;
+  const floorSlots = [
+    { x: -sx, z: -sz }, { x: sx, z: -sz }, { x: sx, z: sz }, { x: -sx, z: sz },
+    { x: 0, z: -sz }, { x: -sx, z: 0 }, { x: sx, z: 0 }, { x: 0, z: sz },
+  ];
+  let floorIdx = 0;
+
+  for (const id of room.objects) {
+    const icon = buildObjectIcon(id, id);
+    const ls = makeLines(icon.segs, color, 1);
+    let labelPos: THREE.Vector3;
+
+    if (icon.kind === "wall") {
+      const wall = wallOrder[wallTurn++ % wallOrder.length];
+      const n = wallCount.get(wall) ?? 0;
+      wallCount.set(wall, n + 1);
+      const along = Math.max(-((wall === "EAST" || wall === "WEST" ? hz : hx) - 1), Math.min((wall === "EAST" || wall === "WEST" ? hz : hx) - 1, (n - 1) * 1.6));
+      if (wall === "NORTH") { ls.position.set(along, 0, -hz + 0.05); }
+      else if (wall === "SOUTH") { ls.position.set(along, 0, hz - 0.05); ls.rotation.y = Math.PI; }
+      else if (wall === "EAST") { ls.position.set(hx - 0.05, 0, along); ls.rotation.y = -Math.PI / 2; }
+      else { ls.position.set(-hx + 0.05, 0, along); ls.rotation.y = Math.PI / 2; }
+      labelPos = ls.position.clone();
+      labelPos.y = icon.height + 0.25;
+    } else if (icon.kind === "flat") {
+      const slot = floorSlots[floorIdx++ % floorSlots.length];
+      ls.position.set(slot.x * 0.4, 0.02, slot.z * 0.4);
+      labelPos = new THREE.Vector3(ls.position.x, 0.6, ls.position.z);
+    } else {
+      const slot = floorSlots[floorIdx++ % floorSlots.length];
+      ls.position.set(slot.x, 0, slot.z);
+      ls.rotation.y = Math.atan2(-slot.x, -slot.z);
+      labelPos = new THREE.Vector3(slot.x, icon.height + 0.3, slot.z);
+    }
+
+    group.add(ls);
+    group.add(makeLabel(id, color, labelPos, 0.7));
+  }
 }
 
 function portalXY(a: Seg, x1: number, x2: number, h: number, plane: number, onZ: boolean) {
