@@ -108,11 +108,11 @@ export function startTitleScene(canvas: HTMLCanvasElement): () => void {
 
     ctx.globalCompositeOperation = "lighter";
 
-    // the lantern's pool of light
-    const glow = ctx.createRadialGradient(fx, fy, 0, fx, fy, lightR * 2.2);
-    glow.addColorStop(0, `rgba(255, 222, 160, ${0.42 * flame})`);
-    glow.addColorStop(0.3, `rgba(255, 170, 90, ${0.18 * flame})`);
-    glow.addColorStop(0.7, "rgba(110, 60, 25, 0.04)");
+    // the lantern's pool of light (kept subtle so the dark dominates)
+    const glow = ctx.createRadialGradient(fx, fy, 0, fx, fy, lightR * 1.9);
+    glow.addColorStop(0, `rgba(255, 222, 160, ${0.22 * flame})`);
+    glow.addColorStop(0.3, `rgba(255, 170, 90, ${0.09 * flame})`);
+    glow.addColorStop(0.7, "rgba(110, 60, 25, 0.02)");
     glow.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
@@ -123,7 +123,7 @@ export function startTitleScene(canvas: HTMLCanvasElement): () => void {
     for (let k = 1; k <= 5; k++) {
       const fyl = fy + scale * 1.4 + k * minDim * 0.045;
       const reach = lightR * (1.1 - k * 0.12);
-      const op = Math.max(0, (1 - k / 6)) * 0.4 * flame;
+      const op = Math.max(0, (1 - k / 6)) * 0.24 * flame;
       ctx.strokeStyle = `rgba(255, 180, 110, ${op})`;
       ctx.beginPath();
       let first = true;

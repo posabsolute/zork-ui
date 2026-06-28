@@ -50,10 +50,10 @@ html, body {
 #welcome .logo {
   position: relative;
   margin: 0;
-  font-family: var(--term-font);
-  font-size: clamp(80px, 20vw, 260px);
+  font-family: "Orbitron", var(--term-font);
+  font-size: clamp(84px, 21vw, 280px);
   font-weight: 900;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   line-height: 1;
   animation: logo-float 5s ease-in-out infinite;
 }
@@ -63,11 +63,17 @@ html, body {
 }
 #welcome .logo .lyr:not(.w) { position: absolute; inset: 0; }
 /* chromatic split: cyan left, magenta right, hot white core */
-#welcome .logo .c { color: #18e0ff; transform: translate(-5px, 3px); mix-blend-mode: screen; }
-#welcome .logo .m { color: #ff2d95; transform: translate(5px, -3px); mix-blend-mode: screen; }
+#welcome .logo .c { color: #18e0ff; transform: translate(-4px, 2px); mix-blend-mode: screen; opacity: 0.9; }
+#welcome .logo .m { color: #ff2d95; transform: translate(4px, -2px); mix-blend-mode: screen; opacity: 0.9; }
 #welcome .logo .w {
-  color: #fff;
-  text-shadow: 0 0 10px #fff, 0 0 26px #18e0ff, 0 0 60px #ff2d95, 0 8px 0 #5a0b3a;
+  color: #f4fbff;
+  -webkit-text-stroke: 1.5px rgba(180, 240, 255, 0.5);
+  text-shadow:
+    0 0 6px #fff,
+    0 0 18px #7fe9ff,
+    0 0 40px #18e0ff,
+    0 0 80px #ff2d95,
+    0 10px 24px rgba(0, 0, 0, 0.7);
   animation: logo-glitch 6s steps(1) infinite;
 }
 @keyframes logo-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
@@ -78,10 +84,10 @@ html, body {
   97.5% { transform: translateX(0); }
 }
 #welcome .logo-sub {
-  margin-top: 6px;
-  font-family: var(--term-font);
+  margin-top: 10px;
+  font-family: "Orbitron", var(--term-font);
   font-size: clamp(18px, 3.4vw, 40px);
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: 0.5em;
   color: #ffe14a;
   text-shadow: 0 0 12px #ffae3a, 0 0 30px #ff7a3a;
@@ -106,9 +112,7 @@ html, body {
   border-radius: 3px;
   box-shadow: 0 0 14px #18e0ff, inset 0 0 14px rgba(24, 224, 255, 0.3);
   text-shadow: 0 0 8px #18e0ff;
-  animation: start-blink 1.2s steps(1) infinite;
 }
-@keyframes start-blink { 0%, 65% { opacity: 1; } 66%, 100% { opacity: 0.35; } }
 #welcome .credit {
   margin-top: 20px;
   font-family: var(--term-font);
