@@ -32,6 +32,8 @@ export interface BuiltRoom {
   entryFacing: (dir?: string) => { pos: THREE.Vector3 };
   /** Room footprint, for sizing the floor grid fade. */
   dims: { W: number; H: number; D: number };
+  /** Fixed camera for "view" rooms (overrides entry placement). */
+  camera?: { pos: [number, number, number]; look: [number, number, number] };
   /** Optional per-frame animation for hero rooms. */
   animate?: (t: number) => void;
 }
@@ -101,7 +103,8 @@ export function buildRoom(room: Room): BuiltRoom {
   }
 
   group.add(makeLines(seg, palette.primary, 1));
-  group.add(makeLines(portal, palette.accent, 1)); // exits glow in the accent
+  // "View" rooms (fixed camera) shouldn't show floating doorway frames in the vista.
+  if (!hero?.camera) group.add(makeLines(portal, palette.accent, 1)); // exits glow in the accent
 
   // Hero rooms override procedural atmosphere with hand-authored geometry.
   let heroObjs: THREE.Object3D[] | null = null;
@@ -129,7 +132,7 @@ export function buildRoom(room: Room): BuiltRoom {
   const animate =
     hero?.animate && heroObjs ? (t: number) => hero.animate!(heroObjs!, t) : undefined;
 
-  return { group, entryFacing, dims: { W, H, D }, animate };
+  return { group, entryFacing, dims: { W, H, D }, camera: hero?.camera, animate };
 }
 
 function placeObjects(

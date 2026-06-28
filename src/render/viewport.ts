@@ -43,6 +43,13 @@ export class Viewport {
     this.renderer.setPixelRatio(1);
     this.scene.background = new THREE.Color(0x000000);
 
+    // Lights for solid (occluding) surfaces in landscape rooms. Line materials
+    // ignore lighting, so the existing line-art rooms are unaffected.
+    this.scene.add(new THREE.AmbientLight(0x1a2233, 1.1));
+    const sun = new THREE.DirectionalLight(0xaac4e6, 1.6);
+    sun.position.set(-1, 1.3, 0.4);
+    this.scene.add(sun);
+
     this.camera = new THREE.PerspectiveCamera(this.baseFov, 16 / 9, 0.1, 140);
     this.camera.position.set(0, 1.6, 2);
 
@@ -75,11 +82,19 @@ export class Viewport {
     this.scene.add(built.group);
     this.current = built;
 
-    const { pos } = built.entryFacing(enteredFrom);
-    this.camera.position.copy(pos);
-    this.camera.lookAt(0, 1.4, 0);
+    if (built.camera) {
+      // "View" rooms fix the camera so the vista is always framed correctly.
+      this.camera.position.set(...built.camera.pos);
+      this.camera.lookAt(...built.camera.look);
+    } else {
+      const { pos } = built.entryFacing(enteredFrom);
+      this.camera.position.copy(pos);
+      this.camera.lookAt(0, 1.4, 0);
+    }
     this.targetYaw = this.camera.rotation.y;
 
+    // "View" rooms are full 3D scenes — hide the abstract floor grid for them.
+    this.grid.object.visible = !built.camera;
     // Fade the floor grid just outside the room footprint so it doesn't sprawl.
     const ext = Math.max(built.dims.W, built.dims.D) / 2;
     this.grid.setExtent(ext + 0.4, ext + (OUTDOOR.has(room.region) ? 5 : 2.5));
