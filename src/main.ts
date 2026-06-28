@@ -2,6 +2,7 @@ import "./style.css";
 import { bootZork } from "./engine/zvm.ts";
 import { RoomState } from "./engine/roomState.ts";
 import { Viewport } from "./render/viewport.ts";
+import { Compass } from "./ui/compass.ts";
 
 const output = document.getElementById("output") as HTMLElement;
 const input = document.getElementById("input") as HTMLInputElement;
@@ -9,6 +10,7 @@ const canvas = document.getElementById("gl") as HTMLCanvasElement;
 
 async function start() {
   const viewport = new Viewport(canvas);
+  const compass = new Compass(document.getElementById("viewport") as HTMLElement);
   const rooms = new RoomState();
   await rooms.load();
 
@@ -34,6 +36,7 @@ async function start() {
         ` dark=${change.isDark} via=${change.enteredFrom ?? "?"}`
     );
     viewport.showRoom(change.room, change.enteredFrom);
+    compass.update(change.room);
   });
 
   const game = await bootZork({

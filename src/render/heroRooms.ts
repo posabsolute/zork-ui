@@ -1042,6 +1042,340 @@ export const HERO_ROOMS: Record<string, HeroSpec> = {
   },
 };
 
+// ===========================================================================
+// Templated heroes for the remaining rooms — every room gets a faithful scene
+// with 1–3 moving elements. Seeded by room id (via ctx.rng) so they vary.
+// ===========================================================================
+
+function mazeHero(): HeroSpec {
+  return {
+    note: "A maze of twisty little passages, all alike.",
+    build: ({ dims, palette, rng }) => {
+      const b: Seg = [], g: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let i = 0; i < 9; i++) {
+        const x = -hx + rng() * dims.W, z = -hz + rng() * dims.D;
+        line(b, x, 0, z, x + (rng() - 0.5) * 1.6, 0.7 + rng() * 1.6, z + (rng() - 0.5) * 1.6);
+      }
+      for (let i = 0; i < 3; i++) {
+        const ox = (rng() - 0.5) * dims.W * 0.5;
+        rectXY(b, ox - 0.5, 0, ox + 0.5, 1.8, (rng() < 0.5 ? -hz : hz) - 0.05);
+      }
+      diamond(g, (rng() - 0.5) * 2, 1.2, (rng() - 0.5) * 2, 0.14); // a will-o'-wisp
+      return [makeLines(b, palette.primary, 1), moving(makeLines(g, palette.accent, 1), "wisp")];
+    },
+  };
+}
+
+function deadEndHero(): HeroSpec {
+  return {
+    note: "A dead end.",
+    build: ({ dims, palette }) => {
+      const b: Seg = [], g: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      rectXY(b, -hx + 0.3, 0, hx - 0.3, H - 0.4, -hz + 0.05); // the wall you hit
+      ln(b, eastWall(dims), -hz + 0.4, 0, hz - 0.4, H - 0.4);
+      ln(b, westWall(dims), -hz + 0.4, 0, hz - 0.4, H - 0.4);
+      diamond(g, 0, 1.4, -hz + 0.2, 0.12);
+      return [makeLines(b, palette.primary, 1), moving(makeLines(g, palette.accent, 0.8), "glow")];
+    },
+  };
+}
+
+function riverHero(): HeroSpec {
+  return {
+    note: "Adrift on the Frigid River; the current carries you downstream.",
+    build: ({ dims, palette }) => {
+      const w: Seg = [], bank: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      waterPlane(w, hx, hz, 0.3, 8);
+      line(bank, -hx, 0.1, -hz, -hx + 0.5, 0.8, hz);
+      line(bank, hx, 0.1, -hz, hx - 0.5, 0.8, hz);
+      return [makeLines(bank, palette.detail, 0.7), moving(makeLines(w, WATER_COLOR, 1), "water")];
+    },
+  };
+}
+
+function coalMineHero(): HeroSpec {
+  return {
+    note: "A maze of coal-mine passages, black with dust.",
+    build: ({ dims, palette, rng }) => {
+      const b: Seg = [], d: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      for (let i = 0; i < 2; i++) {
+        const z = -hz + (dims.D * (i + 1)) / 3;
+        line(b, -hx + 0.5, 0, z, -hx + 0.5, H - 0.3, z);
+        line(b, hx - 0.5, 0, z, hx - 0.5, H - 0.3, z);
+        line(b, -hx + 0.5, H - 0.3, z, hx - 0.5, H - 0.3, z);
+      }
+      const dust: Seg = [];
+      for (let i = 0; i < 5; i++) diamond(dust, -hx + rng() * dims.W, 0.4 + rng() * 1.6, -hz + rng() * dims.D, 0.06);
+      void d;
+      return [makeLines(b, palette.primary, 1), moving(makeLines(dust, palette.detail, 0.5), "wisp")];
+    },
+  };
+}
+
+function corridorHero(note: string, opts: { stairsDown?: boolean } = {}): HeroSpec {
+  return {
+    note,
+    build: ({ dims, palette }) => {
+      const b: Seg = [], g: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      for (let z = -hz + 0.5; z < hz; z += 1.2) {
+        line(b, -hx + 0.2, 0, z, -hx + 0.2, H, z);
+        line(b, hx - 0.2, 0, z, hx - 0.2, H, z);
+      }
+      line(b, -hx + 0.2, H, -hz, -hx + 0.2, H, hz);
+      line(b, hx - 0.2, H, -hz, hx - 0.2, H, hz);
+      if (opts.stairsDown) for (let i = 0; i < 4; i++) rectXZ(b, -0.7, -hz + 0.5 + i * 0.2, 0.7, -hz + 0.9 + i * 0.2, 0.3 + i * 0.3);
+      diamond(g, 0, 1.6, -hz + 0.3, 0.12);
+      return [makeLines(b, palette.primary, 1), moving(makeLines(g, palette.accent, 0.9), "glow")];
+    },
+  };
+}
+
+function caveHero(note: string, dripping = false): HeroSpec {
+  return {
+    note,
+    build: ({ dims, palette, rng }) => {
+      const b: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      for (let i = 0; i < 4; i++) {
+        const x = -hx + rng() * dims.W, z = -hz + rng() * dims.D, len = 0.4 + rng() * 0.7;
+        line(b, x - 0.16, H, z, x, H - len, z);
+        line(b, x + 0.16, H, z, x, H - len, z);
+      }
+      const out: THREE.Object3D[] = [makeLines(b, palette.primary, 1)];
+      if (dripping) {
+        const drip: Seg = [];
+        zigzag(drip, (rng() - 0.5) * dims.W, H - 0.5, (rng() - 0.5) * dims.D, 0.2, 0.04, 4);
+        out.push(moving(makeLines(drip, WATER_COLOR, 1), "water"));
+      } else {
+        const g: Seg = [];
+        zigzag(g, -hx + 0.06, 0.6, (rng() - 0.5) * dims.D, 1.6, 0, 5);
+        out.push(moving(makeLines(g, palette.accent, 1), "glow"));
+      }
+      return out;
+    },
+  };
+}
+
+function cliffHero(): HeroSpec {
+  return {
+    note: "A narrow ledge along the sheer White Cliffs; the Frigid River below.",
+    build: ({ dims, palette }) => {
+      const b: Seg = [], w: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      line(b, -hx + 0.1, 0, -hz, -hx + 0.1, H + 4, hz); // sheer cliff
+      rectXZ(b, -hx + 0.4, -hz + 0.4, hx - 0.4, hz - 0.4, 0.02); // ledge
+      for (let i = 0; i < 3; i++) line(w, -hx + 1, -2, i * 0.4, hx - 1, -2, i * 0.4 + 0.3);
+      return [makeLines(b, palette.primary, 1), moving(makeLines(w, WATER_COLOR, 0.7), "water")];
+    },
+  };
+}
+
+function beachHero(note: string): HeroSpec {
+  return {
+    note,
+    build: ({ dims, palette }) => {
+      const sand: Seg = [], w: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let i = 0; i < 6; i++) { const z = -hz + 0.4 + i * 0.5; line(sand, -hx + 0.4, 0.02, z, hx - 0.4, 0.02, z); }
+      waterPlane(w, hx, 1.2, 0.2, 3);
+      return [makeLines(sand, palette.detail, 0.7), moving(makeLines(w, WATER_COLOR, 1), "water")];
+    },
+  };
+}
+
+function forestGroveHero(dim: boolean): HeroSpec {
+  return {
+    note: dim ? "A dimly lit forest, large trees all around." : "A forest of tall trees.",
+    build: ({ dims, palette }) => {
+      const trunks: Seg = [], leaves: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        heroTree(trunks, leaves, Math.cos(a) * (hx - 0.5), Math.sin(a) * (hz - 0.5), 2.4 + (i % 3) * 0.4);
+      }
+      const firefly: Seg = [];
+      diamond(firefly, 0, 1.4, 0, 0.08);
+      return [makeLines(trunks, palette.primary, 1), makeLines(leaves, palette.accent, 1), moving(makeLines(firefly, 0xffe07a, 1), "twinkle")];
+    },
+  };
+}
+
+// Distinctive remaining rooms ------------------------------------------------
+Object.assign(HERO_ROOMS, {
+  "FOREST-2": forestGroveHero(true),
+  "FOREST-3": forestGroveHero(true),
+  "CLEARING": {
+    note: "A clearing where the forest path runs east-west.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const trunks: Seg = [], leaves: Seg = [], path: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; heroTree(trunks, leaves, Math.cos(a) * (hx - 0.4), Math.sin(a) * (hz - 0.4), 2.6); }
+      line(path, -hx, 0.02, 0, hx, 0.02, 0);
+      const f: Seg = []; diamond(f, 0, 1.4, 0, 0.08);
+      return [makeLines(trunks, palette.primary, 1), makeLines(leaves, palette.accent, 1), makeLines(path, palette.detail, 0.6), moving(makeLines(f, 0xffe07a, 1), "twinkle")];
+    },
+  } as HeroSpec,
+  "GRATING-CLEARING": {
+    note: "A clearing; a grating in the ground, half-buried in leaves.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const trunks: Seg = [], leaves: Seg = [], grate: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; heroTree(trunks, leaves, Math.cos(a) * (hx - 0.4), Math.sin(a) * (hz - 0.4), 2.4); }
+      const s = 0.6;
+      for (let i = -1; i <= 1; i++) { line(grate, i * s / 2, 0.02, -s, i * s / 2, 0.02, s); line(grate, -s, 0.02, i * s / 2, s, 0.02, i * s / 2); }
+      return [makeLines(trunks, palette.primary, 1), makeLines(leaves, palette.accent, 1), moving(makeLines(grate, palette.accent, 1), "glow")];
+    },
+  } as HeroSpec,
+  "MOUNTAINS": {
+    note: "The forest thins, revealing impassable mountains.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const m: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      let px = -hx, py = 1.0;
+      for (let i = 1; i <= 8; i++) { const nx = -hx + (dims.W * i) / 8; const ny = 1.0 + (i % 2 ? 3.5 : 2.0); line(m, px, py, -hz + 0.2, nx, ny, -hz + 0.2); px = nx; py = ny; line(m, px, py, -hz + 0.2, px, 1.0, -hz + 0.2); }
+      const f: Seg = []; diamond(f, 0, 1.4, 1, 0.08);
+      return [makeLines(m, palette.primary, 1), moving(makeLines(f, 0xffe07a, 1), "twinkle")];
+    },
+  } as HeroSpec,
+  "STONE-BARROW": {
+    note: "A great stone barrow — the way to your final reward.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const b: Seg = [], glow: Seg = [];
+      const hz = dims.D / 2;
+      archXY(b, 0, 0, -hz + 0.3, 1.4, 2.4); // barrow entrance
+      for (let i = 0; i < 6; i++) { const a = -hz + 0.3; boxEdges(b, -2 + i * 0.8, 0.4, a + 0.3, 0.7, 0.8, 0.6); } // standing stones
+      rectXY(glow, -1.0, 0, 1.0, 2.0, -hz + 0.25);
+      return [makeLines(b, palette.primary, 1), moving(makeLines(glow, palette.accent, 0.8), "glow")];
+    },
+  } as HeroSpec,
+  "STRANGE-PASSAGE": corridorHero("A strange passage, oddly dimensioned."),
+  "COLD-PASSAGE": corridorHero("A cold and damp passage."),
+  "NARROW-PASSAGE": corridorHero("A narrow north-south passage."),
+  "WINDING-PASSAGE": corridorHero("A winding passage."),
+  "TWISTING-PASSAGE": corridorHero("A twisting passage."),
+  "NS-PASSAGE": corridorHero("A high north-south passage; a stair leads down.", { stairsDown: true }),
+  "EW-PASSAGE-DUP": corridorHero("A passage."),
+  "SMALL-CAVE": caveHero("A small cave."),
+  "TINY-CAVE": caveHero("A tiny cave, barely room to stand."),
+  "SANDY-CAVE": caveHero("A sandy cave off the beach."),
+  "DAMP-CAVE": caveHero("A damp cave; water drips from the ceiling.", true),
+  "WHITE-CLIFFS-NORTH": cliffHero(),
+  "WHITE-CLIFFS-SOUTH": cliffHero(),
+  "SHORE": beachHero("The river shore; water laps at the bank."),
+  "SANDY-BEACH": beachHero("A sandy beach beside the river (something's buried here)."),
+  "SQUEEKY-ROOM": corridorHero("A room whose floor squeaks underfoot."),
+  "SMELLY-ROOM": corridorHero("A small, foul-smelling room; a passage leads down.", { stairsDown: true }),
+  "MINE-ENTRANCE": corridorHero("The entrance to the coal mines."),
+  "LADDER-TOP": {
+    note: "The top of a long ladder descending into the dark.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const b: Seg = [];
+      const hz = dims.D / 2;
+      for (let i = 0; i < 8; i++) { const y = i * -0.5; line(b, -0.3, y, 0, 0.3, y, 0); }
+      line(b, -0.3, 0, 0, -0.3, -4, 0); line(b, 0.3, 0, 0, 0.3, -4, 0);
+      void hz;
+      const g: Seg = []; diamond(g, 0, 1.4, -hz + 0.3, 0.12);
+      return [makeLines(b, palette.primary, 1), moving(makeLines(g, palette.accent, 0.8), "glow")];
+    },
+  } as HeroSpec,
+  "LADDER-BOTTOM": {
+    note: "The bottom of the ladder.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const b: Seg = [];
+      for (let i = 0; i < 8; i++) { const y = 0.5 + i * 0.5; line(b, -0.3, y, 0, 0.3, y, 0); }
+      line(b, -0.3, 0, 0, -0.3, 4.5, 0); line(b, 0.3, 0, 0, 0.3, 4.5, 0);
+      return [makeLines(b, palette.primary, 1)];
+    },
+  } as HeroSpec,
+  "TIMBER-ROOM": corridorHero("A room cluttered with broken timbers; a narrow way on."),
+  "LOWER-SHAFT": {
+    note: "A drafty room at the foot of the shaft; a basket waits on its chain.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const b: Seg = [], chain: Seg = [];
+      const H = dims.H;
+      boxEdges(b, 0, 0.6, 0, 1.0, 1.0, 1.0); // basket
+      line(chain, 0, 1.1, 0, 0, H + 3, 0); // chain up the shaft
+      return [makeLines(b, palette.primary, 1), moving(makeLines(chain, palette.accent, 0.8), "glow")];
+    },
+  } as HeroSpec,
+  "SHAFT-ROOM": {
+    note: "A black shaft; a chain holds a basket you can lower.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const b: Seg = [], chain: Seg = [], shaft: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      boxEdges(b, 1.2, 0.6, 0, 1.0, 1.0, 1.0); // basket
+      line(chain, 1.2, 1.1, 0, 1.2, dims.H, 0);
+      // the shaft going down
+      rectXZ(shaft, -1.2, -1.0, 0.2, 1.0, 0.02);
+      for (let i = 0; i <= 4; i++) { const t = i / 4; line(shaft, -1.2 + t * 1.4, 0.02, -1.0, -1.2 + t * 1.4, -4, 0); }
+      void hx; void hz;
+      return [makeLines(b, palette.primary, 1), makeLines(shaft, palette.detail, 0.6), moving(makeLines(chain, palette.accent, 1), "glow")];
+    },
+  } as HeroSpec,
+  "MACHINE-ROOM": {
+    note: "A great machine with a lid and a switch — coal in, diamond out.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const b: Seg = [], dial: Seg = [];
+      boxEdges(b, 0, 1.0, 0, 2.4, 2.0, 1.6); // the machine
+      line(b, -0.6, 2.0, 0, 0.6, 2.2, 0); // lid (ajar)
+      line(b, 1.2, 1.2, 0.8, 1.6, 1.2, 0.8); // switch
+      ring(dial, -0.7, 0.0, 0.3, 1.4); // a glowing dial on the front face (XZ at y=1.4)
+      return [makeLines(b, palette.primary, 1), moving(makeLines(dial, palette.accent, 1), "glow")];
+    },
+  } as HeroSpec,
+  "SLIDE-ROOM": {
+    note: "A steep coal chute slides down to the cellar.",
+    build: ({ dims, palette }: HeroCtx) => {
+      const b: Seg = [], dust: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2;
+      // a sloping chute
+      line(b, -hx + 0.5, dims.H, hz - 0.5, hx - 0.5, 0.1, -hz + 0.5);
+      line(b, -hx + 1.5, dims.H, hz - 0.5, hx + 0.5, 0.1, -hz + 0.5);
+      line(b, -hx + 0.5, dims.H, hz - 0.5, -hx + 1.5, dims.H, hz - 0.5);
+      for (let i = 0; i < 4; i++) diamond(dust, -hx + 1 + i * 0.8, dims.H - i, hz - 0.6 - i * 0.4, 0.06);
+      return [makeLines(b, palette.primary, 1), moving(makeLines(dust, palette.detail, 0.5), "wisp")];
+    },
+  } as HeroSpec,
+  "BAT-ROOM": {
+    note: "A small room; a large vampire bat hangs above, ready to swoop (garlic!).",
+    build: ({ dims, palette }: HeroCtx) => {
+      const b: Seg = [], bat: Seg = [];
+      const hx = dims.W / 2, hz = dims.D / 2, H = dims.H;
+      rectXZ(b, -hx + 0.3, -hz + 0.3, hx - 0.3, hz - 0.3, H - 0.3); // low ceiling
+      // the bat (a W shape with a body)
+      line(bat, -0.6, H - 0.6, 0, -0.2, H - 0.4, 0);
+      line(bat, -0.2, H - 0.4, 0, 0, H - 0.7, 0);
+      line(bat, 0, H - 0.7, 0, 0.2, H - 0.4, 0);
+      line(bat, 0.2, H - 0.4, 0, 0.6, H - 0.6, 0);
+      const bo = moving(makeLines(bat, palette.accent, 1), "wisp");
+      bo.userData.baseY = 0;
+      return [makeLines(b, palette.primary, 1), bo];
+    },
+  } as HeroSpec,
+});
+
+// Bulk groups
+for (let i = 1; i <= 15; i++) HERO_ROOMS[`MAZE-${i}`] = mazeHero();
+HERO_ROOMS["GRATING-ROOM"] = {
+  note: "A maze room with a grating overhead; daylight leaks through.",
+  build: ({ dims, palette }: HeroCtx) => {
+    const b: Seg = [], light: Seg = [];
+    const H = dims.H;
+    const s = 0.7;
+    for (let i = -1; i <= 1; i++) { line(b, i * s / 2, H - 0.02, -s, i * s / 2, H - 0.02, s); line(b, -s, H - 0.02, i * s / 2, s, H - 0.02, i * s / 2); }
+    for (let i = -1; i <= 1; i++) line(light, i * 0.3, H - 0.02, 0, i * 0.5, 0.1, 0); // shafts of light
+    return [makeLines(b, palette.primary, 1), moving(makeLines(light, palette.accent, 0.8), "glow")];
+  },
+} as HeroSpec;
+for (let i = 1; i <= 5; i++) HERO_ROOMS[`DEAD-END-${i}`] = deadEndHero();
+for (let i = 1; i <= 5; i++) HERO_ROOMS[`RIVER-${i}`] = riverHero();
+for (let i = 1; i <= 4; i++) HERO_ROOMS[`MINE-${i}`] = coalMineHero();
+
 export function getHero(id: string): HeroSpec | undefined {
   return HERO_ROOMS[id];
 }
