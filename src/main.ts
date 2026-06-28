@@ -7,37 +7,37 @@ import { Compass } from "./ui/compass.ts";
 const output = document.getElementById("output") as HTMLElement;
 const input = document.getElementById("input") as HTMLInputElement;
 const canvas = document.getElementById("gl") as HTMLCanvasElement;
+const SAVE_KEY = "zork1:quetzal";
 
-async function start() {
-  const viewport = new Viewport(canvas);
-  const compass = new Compass(document.getElementById("viewport") as HTMLElement);
-  const rooms = new RoomState();
-  await rooms.load();
+// The viewport/compass come up immediately behind the welcome screen; the actual
+// Z-machine does NOT boot until the player presses ENTER on the title — so the
+// game never auto-starts.
+const viewport = new Viewport(canvas);
+const compass = new Compass(document.getElementById("viewport") as HTMLElement);
+const rooms = new RoomState();
+const roomsLoaded = rooms.load();
 
-  const SAVE_KEY = "zork1:quetzal";
-  let latestStatus = "";
-  let gameRef: any = null; // assigned after boot; first onInputReady fires during boot
+let latestStatus = "";
+let gameRef: any = null;
 
-  // Silent autosave: a low-level Quetzal snapshot of RAM/stack/PC to localStorage.
-  function autosave() {
-    if (!gameRef) return;
-    try {
-      const buf = gameRef.vm.save_file(gameRef.vm.pc, 1);
-      const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-      localStorage.setItem(SAVE_KEY, JSON.stringify(Array.from(u8)));
-    } catch (e) {
-      console.warn("autosave failed", e);
-    }
+function autosave() {
+  if (!gameRef) return;
+  try {
+    const buf = gameRef.vm.save_file(gameRef.vm.pc, 1);
+    const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+    localStorage.setItem(SAVE_KEY, JSON.stringify(Array.from(u8)));
+  } catch (e) {
+    console.warn("autosave failed", e);
   }
+}
 
-  rooms.onChange((change) => {
-    console.log(
-      `[room] ${change.room.id} (${change.room.name}) region=${change.room.region}` +
-        ` dark=${change.isDark} via=${change.enteredFrom ?? "?"}`
-    );
-    viewport.showRoom(change.room, change.enteredFrom);
-    compass.update(change.room);
-  });
+rooms.onChange((change) => {
+  viewport.showRoom(change.room, change.enteredFrom);
+  compass.update(change.room);
+});
+
+async function startGame() {
+  await roomsLoaded;
 
   const game = await bootZork({
     storyUrl: "./zork1.z3",
@@ -57,12 +57,11 @@ async function start() {
       },
       onCommand(line) {
         rooms.noteCommand(line);
-        // Every action ripples the world — the scene reacts to you.
         viewport.pulse(1);
       },
       onInputReady() {
         rooms.update(latestStatus);
-        autosave(); // persist after each settled turn (no-op until boot finishes)
+        autosave();
       },
     },
   });
@@ -70,15 +69,13 @@ async function start() {
   gameRef = game;
   rooms.attach(game.vm);
 
-  // Restore a saved game, if present. The VM is now suspended at the opening
-  // prompt (a read instruction); swapping in the saved RAM/stack/PC and issuing
-  // a free "look" resumes exactly where the player left off.
+  // Restore a saved game, if present.
   const saved = localStorage.getItem(SAVE_KEY);
   if (saved) {
     try {
       const u8 = Uint8Array.from(JSON.parse(saved));
       if (game.vm.restore_file(u8, 1)) {
-        output.replaceChildren(); // clear the fresh-game intro
+        output.replaceChildren();
         input.value = "look";
         input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       }
@@ -88,17 +85,36 @@ async function start() {
     }
   }
 
-  // Resolve the opening room once the first prompt is ready.
   setTimeout(() => rooms.update(latestStatus), 0);
-
-  // Debug handles for manual inspection.
   (window as any).__zork = { viewport, rooms, game };
 }
 
-start().catch((err) => {
-  console.error(err);
-  output.appendChild(document.createTextNode("\n[boot error] " + err.message));
+// --- Title screen: only a REAL Enter/click begins the game -----------------
+const welcome = document.getElementById("welcome");
+let begun = false;
+function begin() {
+  if (begun) return;
+  begun = true;
+  welcome?.classList.add("hidden");
+  setTimeout(() => welcome?.remove(), 1100);
+  input.focus();
+  startGame().catch((err) => {
+    console.error(err);
+    output.appendChild(document.createTextNode("\n[boot error] " + err.message));
+  });
+}
+
+window.addEventListener("keydown", (e) => {
+  // isTrusted guards against synthetic events (e.g. the restore "look") starting it.
+  if (!begun && e.isTrusted && (e.key === "Enter" || e.key === " ")) {
+    e.preventDefault();
+    begin();
+  }
+});
+welcome?.addEventListener("click", begin);
+
+document.addEventListener("click", () => {
+  if (begun) input.focus();
 });
 
-document.addEventListener("click", () => input.focus());
-input.focus();
+if (!welcome) begin(); // no title screen present — start directly
