@@ -188,6 +188,39 @@ function rain(ctx: CanvasRenderingContext2D, w: number, h: number, t: number, n 
   }
   ctx.globalAlpha = 1;
 }
+/**
+ * Wet-ground reflection done right: smear the subject's colours downward as soft
+ * wavering gradient streaks (a colour bleed, not a mirrored clone), broken up by
+ * ripple lines. `sources` = {x, w, color-with-alpha}.
+ */
+function reflectionGlow(
+  ctx: CanvasRenderingContext2D, hz: number, h: number,
+  sources: { x: number; w: number; color: string }[], t: number
+) {
+  ctx.globalCompositeOperation = "lighter";
+  const depth = (h - hz) * 0.55;
+  for (const s of sources) {
+    const waver = Math.sin(t * 1.5 + s.x * 0.03) * 4;
+    const g = ctx.createLinearGradient(0, hz, 0, hz + depth);
+    g.addColorStop(0, s.color);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(s.x - s.w / 2 + waver, hz, s.w, depth);
+  }
+  // horizontal ripples that break the reflection up
+  S(ctx, "rgba(120,180,230,0.4)", 1, 6);
+  for (let i = 0; i < 5; i++) {
+    const y = hz + depth * (0.12 + i * 0.18);
+    ctx.globalAlpha = 0.4 - i * 0.06;
+    ctx.beginPath();
+    for (let x = 0; x <= ctx.canvas.width; x += 24) {
+      const yy = y + Math.sin(x * 0.05 + t * 2 + i) * 2;
+      x === 0 ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
 function mailbox(ctx: CanvasRenderingContext2D, x: number, baseY: number, s: number, t: number) {
   S(ctx, "#fff0d0", 2.4, 14);
   ln(ctx, x, baseY, x, baseY - s * 1.4); // post
@@ -239,16 +272,17 @@ const SCENES: Record<string, SceneDraw> = {
     stars(ctx, w, hz - h * 0.1, t, 40);
     clouds(ctx, w, h * 0.6, t);
     treeline(ctx, w, hz, "#5a2a7a");
-    // wet ground: horizon line + faint reflection band
+    const hx = w * 0.58, mx = w * 0.3, my = hz + (h - hz) * 0.32;
+    // wet-ground colour-bleed reflection (no mirrored clone)
+    reflectionGlow(ctx, hz, h, [
+      { x: hx, w: u * 0.5, color: "rgba(60,200,255,0.16)" },
+      { x: hx, w: u * 0.2, color: "rgba(255,90,200,0.14)" },
+      { x: mx, w: u * 0.15, color: "rgba(255,220,170,0.12)" },
+    ], t);
+    // horizon line
     S(ctx, "#ff5ad8", 2, 12); ln(ctx, 0, hz, w, hz);
-    const hx = w * 0.56;
-    // reflection of the house in the wet ground (faint, below the horizon)
-    reflect(ctx, hz + 2, 0.18, () => whiteHouse(ctx, hx, hz, u * 0.15, "door", t));
-    // the neon house
+    // the neon house + mailbox
     whiteHouse(ctx, hx, hz, u * 0.15, "door", t);
-    // mailbox + its reflection
-    const mx = w * 0.28, my = hz + (h - hz) * 0.34;
-    reflect(ctx, hz + 2, 0.18, () => mailbox(ctx, mx, my, u * 0.05, t));
     mailbox(ctx, mx, my, u * 0.05, t);
     fireflies(ctx, w, hz, t, 8, "#ff9ad8");
     rain(ctx, w, h, t);
