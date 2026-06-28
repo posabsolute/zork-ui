@@ -273,20 +273,26 @@ const SCENES: Record<string, SceneDraw> = {
     clouds(ctx, w, h * 0.6, t);
     treeline(ctx, w, hz, "#5a2a7a");
     const hx = w * 0.58, mx = w * 0.3, my = hz + (h - hz) * 0.32;
-    // wet-ground colour-bleed reflection (no mirrored clone)
-    reflectionGlow(ctx, hz, h, [
-      { x: hx, w: u * 0.5, color: "rgba(60,200,255,0.16)" },
-      { x: hx, w: u * 0.2, color: "rgba(255,90,200,0.14)" },
-      { x: mx, w: u * 0.15, color: "rgba(255,220,170,0.12)" },
-    ], t);
     // horizon line
     S(ctx, "#ff5ad8", 2, 12); ln(ctx, 0, hz, w, hz);
     // the neon house + mailbox
     whiteHouse(ctx, hx, hz, u * 0.15, "door", t);
     mailbox(ctx, mx, my, u * 0.05, t);
+    // a dark foreground rise with a faint neon rim, to frame the bottom
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "#04030a";
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    for (let x = 0; x <= w; x += w / 16) ctx.lineTo(x, h - (h - hz) * 0.28 - Math.sin(x * 0.01) * 10);
+    ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+    ctx.globalCompositeOperation = "lighter";
+    S(ctx, "rgba(255,90,200,0.5)", 1.5, 8);
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += w / 16) { const y = h - (h - hz) * 0.28 - Math.sin(x * 0.01) * 10; x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    ctx.stroke();
     fireflies(ctx, w, hz, t, 8, "#ff9ad8");
     rain(ctx, w, h, t);
-    fog(ctx, w, hz + (h - hz) * 0.4, t);
+    fog(ctx, w, hz + (h - hz) * 0.45, t);
   },
   "NORTH-OF-HOUSE": (ctx, w, h, t) => {
     bg(ctx, w, h);
