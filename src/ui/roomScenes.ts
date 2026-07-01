@@ -2330,18 +2330,52 @@ function slideRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: 
 }
 
 // ---- batch 5: the maze & dead-ends ----
-function mazePal(pw: number, ph: number): CavePal {
-  return { wallTop: [44, 44, 52], wallBot: [18, 18, 24], wallHi: [62, 62, 72], floorTop: [40, 40, 46], floorBot: [14, 14, 18], floorHi: [58, 58, 66], ceil: "#070709", light: { x: pw * 0.5, y: ph * 0.98, rx: pw * 0.7, ry: ph, col: [222, 168, 92], peak: 0.82 } };
+function mazePal(pw: number, ph: number, seed = 0): CavePal {
+  const lx = pw * (0.42 + (hash(seed, 41) * 0.16)); // the lamp pool wanders a little room to room
+  return { wallTop: [44, 44, 52], wallBot: [18, 18, 24], wallHi: [62, 62, 72], floorTop: [40, 40, 46], floorBot: [14, 14, 18], floorHi: [58, 58, 66], ceil: "#070709", light: { x: lx, y: ph * 0.98, rx: pw * 0.7, ry: ph, col: [222, 168, 92], peak: 0.82 } };
 }
-// twisty passage openings + criss-crossing wall edges = "all alike" maze
+// "a maze of twisty little passages, all alike" — one family look, but every
+// room's ARRANGEMENT differs: openings vary between tall slots, low crawls and
+// arches; rubble and old scratches shift; the cracks are pixel-walks, not strokes
 function mazeShell(p: CanvasRenderingContext2D, pw: number, ph: number, seed: number, t = 0) {
-  const floorY = caveBackdrop(p, pw, ph, mazePal(pw, ph), t); const rim = "rgb(62,62,72)";
+  const floorY = caveBackdrop(p, pw, ph, mazePal(pw, ph, seed), t); const rim = "rgb(62,62,72)";
   const r = (n: number) => hash(seed * 3.1 + n, 7);
   const xs = [0.09, 0.3, 0.5, 0.7, 0.91];
-  for (let i = 0; i < xs.length; i++) if (r(i) > 0.34) { const fx = xs[i] + (r(i + 10) - 0.5) * 0.05, hh = ph * (0.16 + r(i + 20) * 0.12); darkArch(p, Math.round(pw * fx - pw * 0.035), floorY - Math.round(hh), Math.round(pw * 0.07), Math.round(hh), rim); }
-  p.strokeStyle = rim; p.lineWidth = 1; p.globalAlpha = 0.5; // twisty cracks in the rock
-  for (let i = 0; i < 4; i++) { const x0 = Math.round(r(i + 30) * pw); p.beginPath(); p.moveTo(x0, Math.round(ph * 0.13)); for (let y = Math.round(ph * 0.13); y < floorY; y += 6) p.lineTo(x0 + Math.round((hash(x0, y) - 0.5) * 10), y); p.stroke(); }
-  p.globalAlpha = 1;
+  for (let i = 0; i < xs.length; i++) {
+    if (r(i) <= 0.34) continue;
+    const fx = xs[i] + (r(i + 10) - 0.5) * 0.05;
+    const kind = Math.floor(r(i + 40) * 3); // 0 arch · 1 tall slot · 2 low crawl
+    const wFrac = kind === 1 ? 0.045 : kind === 2 ? 0.1 : 0.07;
+    const hh = ph * (kind === 1 ? 0.26 + r(i + 20) * 0.08 : kind === 2 ? 0.09 + r(i + 20) * 0.04 : 0.16 + r(i + 20) * 0.1);
+    const wpx = Math.round(pw * wFrac), x = Math.round(pw * fx - wpx / 2), y = floorY - Math.round(hh);
+    darkArch(p, x, y, wpx, Math.round(hh), rim);
+    if (kind === 2) { p.fillStyle = "#2c2c34"; p.fillRect(x - 2, y - 2, wpx + 4, 2); } // a heavy brow of rock over the crawl
+  }
+  // twisty cracks: jittering 1px pixel-walks branching through the rock
+  p.fillStyle = "#0d0d11";
+  for (let i = 0; i < 4; i++) {
+    let xx = Math.round(r(i + 30) * (pw - 30)) + 15;
+    for (let y = Math.round(ph * 0.13); y < floorY - 2; y += 2) {
+      xx += Math.round((hash(xx, y + seed) - 0.5) * 4);
+      p.fillRect(xx, y, 1, 2);
+      if (hash(y, xx) > 0.86) p.fillRect(xx + (hash(xx, y) > 0.5 ? 1 : -2), y, 2, 1); // a side shoot
+    }
+  }
+  // rubble fallen from the ceiling — a shaded mound or two, never the same spot
+  for (let m = 0; m < 1 + Math.floor(r(50) * 2); m++) {
+    const mx = Math.round(pw * (0.16 + r(51 + m * 3) * 0.68)), my = floorY + Math.round((ph - floorY) * (0.25 + r(52 + m * 3) * 0.5));
+    const mw = 5 + Math.round(r(53 + m * 3) * 6);
+    p.fillStyle = "#0c0c10"; p.fillRect(mx - mw, my + 2, mw * 2, 2); // its shadow
+    for (let yy = 0; yy < 4; yy++) { const ww = Math.round(mw * (1 - yy / 4)); for (let x = mx - ww; x <= mx + ww; x++) { const k = hash(x, yy + seed); p.fillStyle = k > 0.7 ? "#3e3e48" : k < 0.25 ? "#17171d" : "#2a2a32"; p.fillRect(x, my - yy, 1, 1); } }
+    p.fillStyle = "#4c4c58"; p.fillRect(mx - 1, my - 4, 2, 1); // lamplight catching the top block
+  }
+  // scratches left by the luckless dead — faint tally marks beside an opening
+  if (r(60) > 0.5) {
+    const sx = Math.round(pw * (0.2 + r(61) * 0.6)), sy = Math.round(ph * (0.3 + r(62) * 0.12));
+    p.fillStyle = "#55555f";
+    for (let k = 0; k < 3 + Math.floor(r(63) * 3); k++) p.fillRect(sx + k * 3, sy + ((k + seed) % 2), 1, 5);
+    if (r(64) > 0.6) for (let k = 0; k < 5; k++) p.fillRect(sx - 2 + k * 3, sy + 4 - k, 2, 1); // one struck through
+  }
   return floorY;
 }
 function mazePixel(seed: number) {
