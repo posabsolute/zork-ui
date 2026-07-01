@@ -12,6 +12,7 @@
     />
   </head>
   <body>
+    <div id="players"></div>
     <div id="welcome">
       <canvas id="welcome-canvas"></canvas>
       <div class="welcome-content">
@@ -23,20 +24,22 @@
         <div class="logo-sub">&#9670; I &#9670;</div>
         <div class="tagline">The Great Underground Empire</div>
         <div class="start">PRESS ENTER TO BEGIN</div>
-        <div class="credit">an authentic Z-machine · rendered in vectors</div>
       </div>
       <div class="scanlines"></div>
     </div>
     <div id="app">
-      <div id="viewport"><canvas id="gl"></canvas><canvas id="scene2d"></canvas></div>
-      <div id="terminal">
-        <div id="output" aria-live="polite"></div>
-        <div id="prompt-line">
-          <span id="caret">&gt;</span>
-          <input id="input" type="text" autocomplete="off" autocapitalize="off"
-                 autocorrect="off" spellcheck="false" />
+      <div id="main">
+        <div id="viewport"><canvas id="gl"></canvas><canvas id="scene2d"></canvas></div>
+        <div id="terminal">
+          <div id="output" aria-live="polite"></div>
+          <div id="prompt-line">
+            <span id="caret">&gt;</span>
+            <input id="input" type="text" autocomplete="off" autocapitalize="off"
+                   autocorrect="off" spellcheck="false" />
+          </div>
         </div>
       </div>
+      <aside id="mapPanel"></aside>
     </div>
     <!-- glkapi.js is sloppy-mode (implicit globals); must load as a classic
          script so it can expose window.Glk. Runs before the deferred module. -->

@@ -1,0 +1,7 @@
+.git
+.claude
+.npm-cache
+*.log
+DESIGN.md
+HEROES.md
+PLAN.md

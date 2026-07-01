@@ -247,8 +247,9 @@ export class RoomState {
     lines.push("  turn on / off <thing>, move <thing>");
     lines.push("  attack <foe> with <weapon>");
     lines.push("  save, restore, score, again (g)");
+    lines.push("  hint / clue — a nudge toward the next important thing to do");
     lines.push("");
-    lines.push("(type a direction to travel. HELP is a guide — it doesn't take a turn.)");
+    lines.push("(type a direction to travel. HELP and CLUE are guides — they don't take a turn.)");
     return lines.join("\n");
   }
 

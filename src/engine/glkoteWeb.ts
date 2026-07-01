@@ -152,12 +152,20 @@ export class WebGlkOte {
     if (!win.text) return;
     let appended = "";
     for (const line of win.text) {
-      if (!line.append) {
+      // Drop the engine's own line-echo (Glk style "input"): we already echo every
+      // command ourselves via echoInput() as .echo, so keeping this would print the
+      // command twice ("look\nlook\n…"). A line that was ONLY the echo is skipped
+      // entirely (including its leading break) so no blank line is left behind.
+      const runs = line.content ? normalizeRuns(line.content).filter((r) => r.style !== "input") : null;
+      if (line.content && runs!.length === 0) continue;
+      // A non-append line starts a new paragraph (a break) — but skip the break at
+      // the very top of an empty transcript so there's no blank first line (e.g.
+      // right after a save-restore clears the output).
+      if (!line.append && this.outputEl.childNodes.length > 0) {
         this.outputEl.appendChild(document.createElement("br"));
       }
       if (!line.content) continue;
-      const runs = normalizeRuns(line.content);
-      for (const run of runs) {
+      for (const run of runs!) {
         const span = document.createElement("span");
         span.textContent = run.text;
         if (run.style) span.className = "glk-" + run.style;
@@ -269,6 +277,20 @@ export class WebGlkOte {
     this.outputEl.appendChild(block);
     this.outputEl.appendChild(document.createElement("br"));
     this.outputEl.scrollTop = this.outputEl.scrollHeight;
+  }
+
+  /**
+   * Submit a line to the engine WITHOUT echoing it to the transcript. Used for
+   * the silent room re-render after restoring a save (the injected "look" should
+   * refresh the scene, not appear as if the player typed it). No-op (returns
+   * false) if the engine isn't currently awaiting line input.
+   */
+  submitSilent(line: string): boolean {
+    if (!this.currentInput || this.currentInput.type !== "line") return false;
+    const win = this.currentInput.window;
+    this.currentInput = null;
+    this.sendResponse("line", { id: win }, line);
+    return true;
   }
 
   private echoInput(line: string) {

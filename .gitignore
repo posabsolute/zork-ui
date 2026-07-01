@@ -6,4 +6,5 @@ dist/
 .env
 .env.local
 .npm-cache/
-vendor/
+# only the top-level ZIL source clone — NOT public/vendor/glkapi.js (needed at runtime)
+/vendor/

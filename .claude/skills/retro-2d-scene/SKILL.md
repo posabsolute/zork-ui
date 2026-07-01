@@ -1,7 +1,11 @@
 ---
 name: retro-2d-scene
-description: Compose and render a great retro-realistic 2D canvas scene (neon / synthwave / vector night). Use when building or refining a 2D HTML5-canvas illustration of a place (a room, a vista) that should look atmospheric and alive rather than flat or childish.
+description: DEPRECATED — glowing vector/neon line-art for 2D scenes. This style was rejected as looking like "a kid's drawing." For zork-ui room scenes use the `retro-pixel-scene` skill instead. Kept only for the title-screen vector aesthetic (titleScene.ts), which still works for an abstract single-subject composition.
 ---
+
+> ⚠️ **Superseded for room scenes.** Glowing line-art reads as childish for
+> representational scenes (a house, a vista). Use **`retro-pixel-scene`** for
+> those. The techniques below still apply to the abstract title screen only.
 
 # Building a retro-realistic 2D scene
 
