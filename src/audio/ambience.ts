@@ -188,15 +188,15 @@ class Ambience {
       this.drone(b, [48.99, 51.91, 98], 380, 0.05); // a minor-second cluster, uneasy
       this.every(12000, 28000, () => this.blip(b, 300, 150, 2.2, 0.06)); // a distant moan
     } else if (m === "maze") {
-      const b = this.bus(0.13);
+      const b = this.bus(0.11);
       const oscs = this.drone(b, [55, 82.5], 420, 0.05);
       const lfo = this.ctx.createOscillator(); lfo.frequency.value = 0.045; // ~20s cycle
       const lg = this.ctx.createGain(); lg.gain.value = 1.4; // ± cents of wrongness
       lfo.connect(lg); lg.connect(oscs[1].detune); lfo.start();
       this.stops.push(() => lfo.stop());
-      this.every(5000, 12000, () => this.blip(b, 1100 + Math.random() * 500, 350, 0.5, 0.16)); // drips
+      this.every(5000, 12000, () => this.blip(b, 1100 + Math.random() * 500, 350, 0.5, 0.12)); // drips
     } else if (m === "temple") {
-      const b = this.bus(0.13);
+      const b = this.bus(0.11);
       this.drone(b, [55, 110.3], 420, 0.04);
       this.every(14000, 30000, () => this.blip(b, 523, 519, 3.5, 0.05, "triangle")); // a bell partial hangs in the air
     } else if (m === "dark") {
@@ -206,9 +206,9 @@ class Ambience {
         this.timers.push(window.setTimeout(() => this.blip(b, 52, 38, 0.12, 0.35), 260));
       });
     } else {
-      const b = this.bus(0.14); // underground
+      const b = this.bus(0.11); // underground
       this.drone(b, [55, 82.5], 420, 0.05);
-      this.every(4500, 11000, () => this.blip(b, 1200 + Math.random() * 400, 380, 0.5, 0.16)); // cave drips
+      this.every(4500, 11000, () => this.blip(b, 1200 + Math.random() * 400, 380, 0.5, 0.12)); // cave drips
     }
     // tension: a monster alive in this very room
     const rs = this.flags;
