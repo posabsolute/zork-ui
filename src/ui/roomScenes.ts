@@ -116,17 +116,6 @@ function swayGrass(ctx: CanvasRenderingContext2D, w: number, y: number, color: s
   }
   ctx.globalAlpha = 1;
 }
-function fireflies(ctx: CanvasRenderingContext2D, w: number, h: number, t: number, n: number, color: string) {
-  F(ctx, color, 12);
-  for (let i = 0; i < n; i++) {
-    const x = ((i * 53) % 100) / 100 * w + Math.sin(t * 0.6 + i * 1.3) * 26;
-    const y = h * 0.42 + ((i * 31) % 100) / 100 * h * 0.32 + Math.cos(t * 0.8 + i) * 16;
-    ctx.globalAlpha = 0.3 + 0.6 * Math.abs(Math.sin(t * 2.2 + i));
-    dot(ctx, x, y, 1.7);
-  }
-  ctx.globalAlpha = 1;
-}
-
 // A big soft light source with a glow pool (the homescreen's key move).
 function moonGlow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, t: number) {
   ctx.globalCompositeOperation = "lighter";
@@ -628,6 +617,16 @@ function pixelBackdrop(p: CanvasRenderingContext2D, pw: number, ph: number, t: n
   p.fillStyle = "#122032"; for (let x = 0; x < pw; x += 2) if (hash(x >> 1, 8) > 0.72) p.fillRect(x, horizon - 1, 1, 1); // moonlight snagging a few crowns
   return horizon;
 }
+// fireflies drifting between the trunks — blink on, drift, wink out
+function fireflies(p: CanvasRenderingContext2D, pw: number, ph: number, horizon: number, t: number, n = 3) {
+  for (let i = 0; i < n; i++) {
+    const on = Math.sin(t * 1.6 + i * 2.9) > 0.45; if (!on) continue;
+    const fx = Math.round(pw * (0.14 + i * 0.32) + Math.sin(t * 0.37 + i * 2.4) * pw * 0.09);
+    const fy = Math.round(horizon + (ph - horizon) * (0.2 + 0.18 * Math.sin(t * 0.21 + i * 1.7)));
+    p.fillStyle = "#3e5a22"; p.fillRect(fx - 1, fy, 3, 1); p.fillRect(fx, fy - 1, 1, 3); // faint green cross
+    p.fillStyle = "#c2ff8a"; p.fillRect(fx, fy, 1, 1); // the spark
+  }
+}
 function rainPixel(p: CanvasRenderingContext2D, pw: number, ph: number, t: number, n = 70) {
   p.fillStyle = "rgba(150,180,220,0.30)";
   for (let i = 0; i < n; i++) { const rx = Math.floor(hash(i, 7) * pw); const ry = Math.floor((t * 95 + i * 41) % (ph + 10)); p.fillRect(rx, ry, 1, 2); }
@@ -811,6 +810,7 @@ function pixelTree(p: CanvasRenderingContext2D, x: number, baseY: number, hgt: n
 function forest1Pixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const horizon = forestBackdrop(p, pw, ph, t, "east"); // sunlight to the east — the way out
+    fireflies(p, pw, ph, horizon, t);
     for (let i = 0; i < 5; i++) pixelTree(p, pw * (0.1 + i * 0.16), horizon + 4, ph * (0.3 + hash(i, 21) * 0.1), pw * 0.05, t, true);
     pixelTree(p, pw * 0.3, ph - 2, ph * 0.8, pw * 0.09, t, false);
     pixelTree(p, pw * 0.12, ph + 8, ph * 1.0, pw * 0.12, t, false); // near framing tree, off-centre
@@ -904,11 +904,13 @@ function upATreePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
     const nx = Math.round(pw * 0.64), ny = Math.round(ph * 0.6);
     p.fillStyle = "#4a3a22"; fillDisc(p, nx, ny, 9); p.fillStyle = "#2c2113"; fillDisc(p, nx, ny - 1, 6); // woven nest
     for (let a = 0; a < 14; a++) { const ang = a / 14 * Math.PI * 2; p.fillStyle = "#5a4626"; p.fillRect(nx + Math.round(Math.cos(ang) * 9), ny + Math.round(Math.sin(ang) * 5), 1, 1); }
-    // egg: golden ovoid with a jewel glint (reflective sheen, NOT a light source)
-    p.fillStyle = "#c9a23a"; for (let yy = -4; yy <= 4; yy++) { const xw = Math.floor(Math.sqrt(1 - (yy / 4.5) ** 2) * 3.4); p.fillRect(nx - xw, ny - 2 + yy, xw * 2 + 1, 1); }
-    p.fillStyle = "#f0d878"; p.fillRect(nx - 1, ny - 4, 2, 2); // highlight
-    if (Math.sin(t * 2) > 0.6) { p.fillStyle = "#fff4c0"; p.fillRect(nx - 1, ny - 4, 1, 1); } // glint
-    p.fillStyle = "#8a6a22"; p.fillRect(nx - 2, ny + 1, 4, 1); // shadow band
+    if (hasObj("UP-A-TREE", "EGG")) {
+      // egg: golden ovoid with a jewel glint (reflective sheen, NOT a light source)
+      p.fillStyle = "#c9a23a"; for (let yy = -4; yy <= 4; yy++) { const xw = Math.floor(Math.sqrt(1 - (yy / 4.5) ** 2) * 3.4); p.fillRect(nx - xw, ny - 2 + yy, xw * 2 + 1, 1); }
+      p.fillStyle = "#f0d878"; p.fillRect(nx - 1, ny - 4, 2, 2); // highlight
+      if (Math.sin(t * 2) > 0.6) { p.fillStyle = "#fff4c0"; p.fillRect(nx - 1, ny - 4, 1, 1); } // glint
+      p.fillStyle = "#8a6a22"; p.fillRect(nx - 2, ny + 1, 4, 1); // shadow band
+    } // taken → the nest sits empty
   });
 }
 
@@ -1066,21 +1068,25 @@ function kitchenPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
     p.fillStyle = "#4a371e"; p.fillRect(tx0, tty + 2, tw, 2); // apron
     p.fillStyle = "#3a2a16"; p.fillRect(tx0 + 1, tty + 4, 2, 12); p.fillRect(tx0 + tw - 3, tty + 4, 2, 12); // rear legs
     p.fillStyle = "#523c20"; p.fillRect(tx0 + 3, tty + 4, 2, 15); p.fillRect(tx0 + tw - 5, tty + 4, 2, 15); // front legs (nearer, lighter)
-    // the brown sack, lumpy with a gathered neck
-    const scx = tx0 + 7, sy = tty - 8;
-    p.fillStyle = "#1c1408"; p.fillRect(scx - 1, sy, 12, 8); // outline mass
-    p.fillStyle = "#6a5230"; p.fillRect(scx, sy + 1, 10, 7);
-    p.fillStyle = "#7e6338"; p.fillRect(scx + 1, sy + 1, 4, 3); // lit shoulder
-    p.fillStyle = "#4a3820"; p.fillRect(scx + 6, sy + 3, 4, 5); p.fillRect(scx + 2, sy + 6, 8, 2); // folds
-    p.fillStyle = "#3a2c16"; p.fillRect(scx + 3, sy - 2, 4, 3); p.fillStyle = "#8a7040"; p.fillRect(scx + 3, sy - 1, 4, 1); // gathered neck + tie
-    // the glass bottle of water — clear glass, water line, moon glint
-    const bx = tx0 + tw - 10, by = tty - 10;
-    p.fillStyle = "#101418"; p.fillRect(bx - 1, by, 5, 10); // outline
-    p.fillStyle = "#3c5660"; p.fillRect(bx, by + 1, 3, 9);
-    p.fillStyle = "#2a4048"; p.fillRect(bx, by - 2, 3, 3); p.fillStyle = "#4a6a74"; p.fillRect(bx, by - 3, 3, 1); // neck + lip
-    p.fillStyle = "#54808c"; p.fillRect(bx, by + 5, 3, 4); // water inside
-    p.fillStyle = "#bcd4e0"; p.fillRect(bx + 2, by + 1, 1, 8); // moonlit glass edge
-    if (Math.sin(t * 2.4) > 0.55) { p.fillStyle = "#e8f4fa"; p.fillRect(bx + 2, by + 2, 1, 2); } // glint
+    if (hasObj("KITCHEN", "SANDWICH-BAG")) {
+      // the brown sack, lumpy with a gathered neck
+      const scx = tx0 + 7, sy = tty - 8;
+      p.fillStyle = "#1c1408"; p.fillRect(scx - 1, sy, 12, 8); // outline mass
+      p.fillStyle = "#6a5230"; p.fillRect(scx, sy + 1, 10, 7);
+      p.fillStyle = "#7e6338"; p.fillRect(scx + 1, sy + 1, 4, 3); // lit shoulder
+      p.fillStyle = "#4a3820"; p.fillRect(scx + 6, sy + 3, 4, 5); p.fillRect(scx + 2, sy + 6, 8, 2); // folds
+      p.fillStyle = "#3a2c16"; p.fillRect(scx + 3, sy - 2, 4, 3); p.fillStyle = "#8a7040"; p.fillRect(scx + 3, sy - 1, 4, 1); // gathered neck + tie
+    }
+    if (hasObj("KITCHEN", "BOTTLE")) {
+      // the glass bottle of water — clear glass, water line, moon glint
+      const bx = tx0 + tw - 10, by = tty - 10;
+      p.fillStyle = "#101418"; p.fillRect(bx - 1, by, 5, 10); // outline
+      p.fillStyle = "#3c5660"; p.fillRect(bx, by + 1, 3, 9);
+      p.fillStyle = "#2a4048"; p.fillRect(bx, by - 2, 3, 3); p.fillStyle = "#4a6a74"; p.fillRect(bx, by - 3, 3, 1); // neck + lip
+      p.fillStyle = "#54808c"; p.fillRect(bx, by + 5, 3, 4); // water inside
+      p.fillStyle = "#bcd4e0"; p.fillRect(bx + 2, by + 1, 1, 8); // moonlit glass edge
+      if (Math.sin(t * 2.4) > 0.55) { p.fillStyle = "#e8f4fa"; p.fillRect(bx + 2, by + 2, 1, 2); } // glint
+    }
   });
 }
 // ── Interactive room states (PER ROOM) ───────────────────────────────────
@@ -1107,7 +1113,9 @@ export const roomState: Record<string, RoomFlags> = {
   "KITCHEN": { windowOpen: false },
   "LIVING-ROOM": { rugMoved: false, trapOpen: false, caseOpen: false, treasures: [] },
   "TROLL-ROOM": { trollDead: false },
-  "CYCLOPS-ROOM": { cyclopsGone: false },
+  "CYCLOPS-ROOM": { cyclopsGone: false, cyclopsAsleep: false },
+  "DAM-BASE": { boatInflated: false },
+  "END-OF-RAINBOW": { rainbowSolid: false },
   "GRATING-ROOM": { gratingOpen: false },
   "DAM-ROOM": { gatesOpen: false },
   "RESERVOIR": { drained: false },
@@ -1125,6 +1133,9 @@ export const roomState: Record<string, RoomFlags> = {
 export function setRoomFlag(room: string, key: string, val: boolean | string[]) { (roomState[room] ||= {})[key] = val; }
 function rf(room: string, key: string): boolean { return roomState[room]?.[key] === true; }
 function treasuresOf(room: string): string[] { const v = roomState[room]?.treasures; return Array.isArray(v) ? v : []; }
+// contents-driven props: a prop is drawn only while its object really is in the
+// room. A room with no recorded contents yet defaults to PRESENT (first visit).
+function hasObj(room: string, id: string): boolean { const v = roomState[room]?.objects; return !Array.isArray(v) || (v as string[]).includes(id); }
 function trapDoor(p: CanvasRenderingContext2D, cx: number, cy: number, open: boolean) {
   const wd = 22, hd = 14, x0 = Math.round(cx - wd / 2), y0 = Math.round(cy - hd / 2);
   p.fillStyle = "#0c0806"; p.fillRect(x0 - 2, y0 - 2, wd + 4, hd + 4); // frame outline
@@ -1230,7 +1241,7 @@ function livingRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t:
     }
     p.fillStyle = "#2a1d10"; p.fillRect(0, floorY - 6, pw, 6); p.fillStyle = "#3c2c18"; p.fillRect(0, floorY - 6, pw, 1); // baseboard
     // the elvish sword, mounted on the wall high above the case
-    swordMounted(p, Math.round(pw * 0.5), Math.round(ph * 0.085), Math.round(pw * 0.22));
+    if (hasObj("LIVING-ROOM", "SWORD")) swordMounted(p, Math.round(pw * 0.5), Math.round(ph * 0.085), Math.round(pw * 0.22));
     // the trophy case — an ornate glass cabinet (focal point), showing your treasures
     const cx = Math.round(pw * 0.5), cyT = Math.round(ph * 0.2), cw = Math.round(pw * 0.25), chH = Math.round(ph * 0.34);
     out(cx - cw / 2, cyT, cw, chH);
@@ -1248,7 +1259,7 @@ function livingRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t:
       p.fillStyle = "#5a4022"; p.fillRect(cx - cw / 2 - 4, cyT + 2, 1, chH - 4); p.fillRect(cx + cw / 2 + 3, cyT + 2, 1, chH - 4);
     } else { p.fillStyle = "#241a0e"; p.fillRect(cx - 1, cyT, 2, chH); } // closed: the seam between the two doors
     // the brass lantern, on top of the case
-    lanternIcon(p, cx + Math.round(cw * 0.28), cyT - 8);
+    if (hasObj("LIVING-ROOM", "LAMP")) lanternIcon(p, cx + Math.round(cw * 0.28), cyT - 8);
     // gothic wooden door (WEST), arched & nailed shut
     gothicDoor(p, Math.round(pw * 0.04), Math.round(ph * 0.18), Math.round(pw * 0.12), floorY - Math.round(ph * 0.18));
     // doorway EAST — recessed opening to the kitchen; its moonlit window shows through
@@ -1306,20 +1317,24 @@ function atticPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: numb
     p.fillStyle = "#3e2e19"; p.fillRect(tx0, tty + 2, tw, 1); // apron
     p.fillStyle = "#32250f"; p.fillRect(tx0 + 1, tty + 3, 2, 9); p.fillRect(tx0 + tw - 3, tty + 3, 2, 9);
     p.fillStyle = "#46351a"; p.fillRect(tx0 + 3, tty + 3, 2, 11); p.fillRect(tx0 + tw - 5, tty + 3, 2, 11); // near legs
-    // the nasty-looking knife, on the table
-    const kx = tcx - 2;
-    p.fillStyle = "#11141a"; p.fillRect(kx - 1, tty - 3, 12, 3); // outline
-    p.fillStyle = "#aab4c2"; p.fillRect(kx, tty - 2, 7, 1); p.fillStyle = "#d8e2ec"; p.fillRect(kx, tty - 3, 6, 1); // wicked blade
-    p.fillStyle = "#4a3016"; p.fillRect(kx + 7, tty - 3, 3, 2); p.fillStyle = "#2a1a0c"; p.fillRect(kx + 9, tty - 3, 1, 2); // handle
-    if (Math.sin(t * 3.1) > 0.72) { p.fillStyle = "#ffffff"; p.fillRect(kx + 1, tty - 3, 1, 1); } // mean little glint
-    // ── the large coil of rope, lying in the corner (right, half in shadow) ──
-    const rcx2 = Math.round(pw * 0.85), rcy2 = Math.round(ph * 0.78);
-    p.fillStyle = "#100c06"; for (let yy = -6; yy <= 6; yy++) { const xw = Math.floor(Math.sqrt(Math.max(0, 1 - (yy / 6.5) ** 2)) * 13); p.fillRect(rcx2 - xw, rcy2 + yy, xw * 2 + 1, 1); } // outline mass
-    for (let ring = 11; ring >= 3; ring -= 3) { // coiled loops, flattened ellipses
-      for (let a = 0; a < 64; a++) { const ang = (a / 64) * Math.PI * 2; const xx = rcx2 + Math.round(Math.cos(ang) * ring), yy = rcy2 + Math.round(Math.sin(ang) * ring * 0.45);
-        p.fillStyle = (a & 2) ? "#7a6234" : "#5c4826"; p.fillRect(xx, yy, 1, 1); }
+    if (hasObj("ATTIC", "KNIFE")) {
+      // the nasty-looking knife, on the table
+      const kx = tcx - 2;
+      p.fillStyle = "#11141a"; p.fillRect(kx - 1, tty - 3, 12, 3); // outline
+      p.fillStyle = "#aab4c2"; p.fillRect(kx, tty - 2, 7, 1); p.fillStyle = "#d8e2ec"; p.fillRect(kx, tty - 3, 6, 1); // wicked blade
+      p.fillStyle = "#4a3016"; p.fillRect(kx + 7, tty - 3, 3, 2); p.fillStyle = "#2a1a0c"; p.fillRect(kx + 9, tty - 3, 1, 2); // handle
+      if (Math.sin(t * 3.1) > 0.72) { p.fillStyle = "#ffffff"; p.fillRect(kx + 1, tty - 3, 1, 1); } // mean little glint
     }
-    p.fillStyle = "#8a7040"; p.fillRect(rcx2 - 13, rcy2 - 3, 2, 1); p.fillRect(rcx2 - 14, rcy2 - 2, 2, 2); // the loose end
+    if (hasObj("ATTIC", "ROPE")) {
+      // ── the large coil of rope, lying in the corner (right, half in shadow) ──
+      const rcx2 = Math.round(pw * 0.85), rcy2 = Math.round(ph * 0.78);
+      p.fillStyle = "#100c06"; for (let yy = -6; yy <= 6; yy++) { const xw = Math.floor(Math.sqrt(Math.max(0, 1 - (yy / 6.5) ** 2)) * 13); p.fillRect(rcx2 - xw, rcy2 + yy, xw * 2 + 1, 1); } // outline mass
+      for (let ring = 11; ring >= 3; ring -= 3) { // coiled loops, flattened ellipses
+        for (let a = 0; a < 64; a++) { const ang = (a / 64) * Math.PI * 2; const xx = rcx2 + Math.round(Math.cos(ang) * ring), yy = rcy2 + Math.round(Math.sin(ang) * ring * 0.45);
+          p.fillStyle = (a & 2) ? "#7a6234" : "#5c4826"; p.fillRect(xx, yy, 1, 1); }
+      }
+      p.fillStyle = "#8a7040"; p.fillRect(rcx2 - 13, rcy2 - 3, 2, 1); p.fillRect(rcx2 - 14, rcy2 - 2, 2, 2); // the loose end
+    }
     // faint lamp flicker on the nearest floor
     const fl = 0.85 + 0.15 * Math.abs(Math.sin(t * 4) + 0.3 * Math.sin(t * 9));
     p.globalAlpha = (fl - 0.85) * 0.6; p.fillStyle = "#caa24e"; for (let i = 0; i < 40; i++) { const gx = pw * 0.5 + (hash(i, 5) - 0.5) * pw * 0.5, gy = ph * 0.82 + hash(i, 6) * ph * 0.14; if (hash(i, 7) > 0.5) p.fillRect(Math.round(gx), Math.round(gy), 1, 1); }
@@ -1498,6 +1513,27 @@ function cyclopsRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t
         p.fillStyle = hash(i, 14) > 0.5 ? "#4a4e58" : "#3a3e46"; p.fillRect(rx, ry - 1, bw2, 2);
         p.fillStyle = "#6a6e78"; p.fillRect(rx, ry - 1, bw2, 1); // lamplit top
       }
+    } else if (rf("CYCLOPS-ROOM", "cyclopsAsleep")) {
+      // fed, watered, and dead to the world — slumped against the back wall
+      const cx2 = Math.round(pw * 0.48), fy = floorY + Math.round((ph - floorY) * 0.5);
+      const d0 = "#3e2c18", d1 = "#5a4226", d2 = "#755733", ink = "#1c1206", fur = "#4a3418";
+      const breathe = Math.round(Math.abs(Math.sin(t * 1.1)) * 2);
+      p.fillStyle = "#0e0a06"; p.fillRect(cx2 - 26, fy + 7, 64, 3); // his shadow
+      p.fillStyle = d1; p.fillRect(cx2 + 4, fy + 1, 28, 6); p.fillStyle = d0; p.fillRect(cx2 + 4, fy + 5, 28, 2); // legs stretched out
+      p.fillStyle = d0; p.fillRect(cx2 + 30, fy - 2, 6, 9); p.fillStyle = "#e8dec2"; p.fillRect(cx2 + 32, fy - 2, 3, 1); // feet, toenails up
+      for (let yy = 0; yy < 18 + breathe; yy++) { const wd = 24 - Math.round(yy * 0.5); p.fillStyle = yy < 3 ? d2 : d1; p.fillRect(cx2 - 20, fy + 3 - yy, wd, 1); } // torso reclined, rising with each breath
+      p.fillStyle = fur; p.fillRect(cx2 - 14, fy - 1, 20, 5); // loincloth
+      p.fillStyle = d1; p.fillRect(cx2 - 8, fy - 9, 18, 5); p.fillStyle = d2; p.fillRect(cx2 - 8, fy - 9, 18, 1); // an arm flopped over the belly
+      p.fillStyle = d1; fillDisc(p, cx2 - 13, fy - 17 - breathe, 9); p.fillStyle = d2; fillDisc(p, cx2 - 16, fy - 16 - breathe, 5); // head tipped onto the chest
+      p.fillStyle = "#32220e"; p.fillRect(cx2 - 22, fy - 22 - breathe, 18, 3); // matted hair
+      p.fillStyle = ink; p.fillRect(cx2 - 19, fy - 16 - breathe, 11, 2); // the one great eye, shut tight
+      p.fillStyle = "#2a1208"; p.fillRect(cx2 - 16, fy - 11 - breathe, 7, 2); // slack, snoring mouth
+      p.fillStyle = "#c8c4b0"; // Zzz drifting up and away
+      const zt = (t * 7) % 26;
+      for (const [zo, zs] of [[0, 2], [9, 3], [18, 4]] as const) {
+        const prog = (zt + zo) % 26, zy = fy - 24 - prog, zx = cx2 - 4 + Math.round(prog * 0.5);
+        if (zy > 6) { p.fillRect(zx, zy, zs, 1); for (let k = 0; k < zs; k++) p.fillRect(zx + zs - 1 - k, zy + 1 + k, 1, 1); p.fillRect(zx, zy + zs + 1, zs, 1); }
+      }
     } else {
       // the cyclops — a huge one-eyed giant, hungry, blocking the stair
       cyclopsSprite(p, pw * 0.5, floorY + Math.round((ph - floorY) * 0.55), Math.round(ph * 0.62), t);
@@ -1577,6 +1613,7 @@ function egyptRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: 
     // hieroglyph bands across the tomb's back wall
     p.fillStyle = "#7a6a44"; for (let r = 0; r < 2; r++) { const yy = lay.by0 + 6 + r * Math.round((lay.by1 - lay.by0) * 0.35); for (let x = lay.bx0 + 4; x < lay.bx1 - 4; x += 7) { p.fillRect(x, yy, 1, 5); p.fillRect(x + 2, yy + 1, 3, 1); p.fillRect(x + 3, yy + 3, 1, 2); } }
     // the solid-gold coffin (sarcophagus), the focal treasure, upright on a plinth
+    if (!hasObj("EGYPT-ROOM", "COFFIN")) return; // carried off — only the tomb remains
     const cx = Math.round(pw * 0.54), cy = floorY + Math.round((ph - floorY) * 0.48), CL = 26; // CL = head→foot length
     p.fillStyle = "#141008"; p.fillRect(cx - 15, cy + CL / 2 + 3, 30, 2); // its shadow
     p.fillStyle = "#6a604a"; p.fillRect(cx - 14, cy + CL / 2, 28, 3); p.fillStyle = "#847a62"; p.fillRect(cx - 14, cy + CL / 2, 28, 1); // stone plinth
@@ -1609,14 +1646,17 @@ function galleryPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
     const floorY = interiorBackdrop(p, pw, ph, { wallTop: [46, 40, 34], wallBot: [28, 24, 20], floorTop: [60, 46, 30], floorBot: [30, 22, 14], floorHi: [78, 60, 38], plank: "#241a10", seam: "#170f08", light: { x: pw * 0.5, y: ph * 0.32, rx: pw * 0.8, ry: ph * 0.9, col: [160, 150, 140], peak: 0.34 } }, t);
     // empty frames where vandals stole the art, and one remaining painting
     p.fillStyle = "#6a5436"; for (const fx of [0.16, 0.34, 0.84]) { const x = Math.round(pw * fx); p.fillRect(x - 10, Math.round(ph * 0.16), 20, Math.round(ph * 0.2)); p.fillStyle = pal0(p, x, ph); p.fillRect(x - 8, Math.round(ph * 0.16) + 2, 16, Math.round(ph * 0.2) - 4); p.fillStyle = "#6a5436"; }
-    // the surviving painting (focal) — a small framed landscape, gilt-framed
+    // the surviving painting (focal) — a small framed landscape, gilt-framed;
+    // once it's taken, its frame hangs as empty as all the others
     const gx = Math.round(pw * 0.55), gy = Math.round(ph * 0.16), iw = 24, ih = Math.round(ph * 0.22) - 4, ix = gx - iw / 2, iy = gy + 2;
     p.fillStyle = "#8a6a3a"; p.fillRect(gx - iw / 2 - 3, gy, iw + 6, Math.round(ph * 0.22)); p.fillStyle = "#c8a24a"; p.fillRect(gx - iw / 2 - 3, gy, iw + 6, 2); p.fillStyle = "#5a431f"; p.fillRect(gx - iw / 2 - 3, gy + Math.round(ph * 0.22) - 2, iw + 6, 2); // gilt frame
-    for (let yy = 0; yy < Math.round(ih * 0.58); yy++) { const f = yy / (ih * 0.58); p.fillStyle = f < 0.5 ? "#9cbcd6" : "#d2e2dc"; p.fillRect(ix, iy + yy, iw, 1); } // sky
-    p.fillStyle = "#f0d878"; fillDisc(p, ix + iw - 6, iy + 5, 3); // sun
-    p.fillStyle = "#6f9050"; for (let xx = 0; xx < iw; xx++) { const hy = Math.round(ih * 0.5 + Math.sin(xx * 0.45) * 2); p.fillRect(ix + xx, iy + hy, 1, ih - hy); } // far hills
-    p.fillStyle = "#4d6e34"; for (let xx = 0; xx < iw; xx++) { const hy = Math.round(ih * 0.68 + Math.sin(xx * 0.3 + 2) * 2); p.fillRect(ix + xx, iy + hy, 1, ih - hy); } // near hills
-    p.fillStyle = "#3a2a18"; p.fillRect(ix + 5, iy + ih - 9, 1, 5); p.fillStyle = "#3e5e2a"; fillDisc(p, ix + 5, iy + ih - 10, 3); // a little tree
+    if (hasObj("GALLERY", "PAINTING")) {
+      for (let yy = 0; yy < Math.round(ih * 0.58); yy++) { const f = yy / (ih * 0.58); p.fillStyle = f < 0.5 ? "#9cbcd6" : "#d2e2dc"; p.fillRect(ix, iy + yy, iw, 1); } // sky
+      p.fillStyle = "#f0d878"; fillDisc(p, ix + iw - 6, iy + 5, 3); // sun
+      p.fillStyle = "#6f9050"; for (let xx = 0; xx < iw; xx++) { const hy = Math.round(ih * 0.5 + Math.sin(xx * 0.45) * 2); p.fillRect(ix + xx, iy + hy, 1, ih - hy); } // far hills
+      p.fillStyle = "#4d6e34"; for (let xx = 0; xx < iw; xx++) { const hy = Math.round(ih * 0.68 + Math.sin(xx * 0.3 + 2) * 2); p.fillRect(ix + xx, iy + hy, 1, ih - hy); } // near hills
+      p.fillStyle = "#3a2a18"; p.fillRect(ix + 5, iy + ih - 9, 1, 5); p.fillStyle = "#3e5e2a"; fillDisc(p, ix + 5, iy + ih - 10, 3); // a little tree
+    } else { p.fillStyle = "#1c1712"; p.fillRect(ix, iy, iw, ih); p.fillStyle = "#292118"; p.fillRect(ix + 2, iy + 2, iw - 4, 1); } // bare backing where it hung
     darkArch(p, Math.round(pw * 0.04), floorY - Math.round(ph * 0.26), Math.round(pw * 0.08), Math.round(ph * 0.26), "#3a342c"); // west
     void t;
   });
@@ -1633,11 +1673,13 @@ function southTemplePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t
     p.fillStyle = "#6e654f"; p.fillRect(ax + 12, ay, 4, 10); // candle-shadowed flank
     p.fillStyle = "#5a5240"; for (let yy = ay + 3; yy < ay + 10; yy += 3) p.fillRect(ax - 16, yy, 32, 1); // masonry courses
     p.fillStyle = "#b0a482"; p.fillRect(ax - 17, ay - 2, 34, 2); p.fillStyle = "#c6ba94"; p.fillRect(ax - 17, ay - 2, 34, 1); // the candle-lit slab on top
-    // the large black book, lying open-side out in the centre of the altar
-    p.fillStyle = "#0c0a10"; p.fillRect(ax - 5, ay - 8, 10, 6); // black cover
-    p.fillStyle = "#26222e"; p.fillRect(ax - 5, ay - 8, 10, 1); p.fillRect(ax - 5, ay - 8, 1, 6); // its lamplit spine edge
-    p.fillStyle = "#d8d0b4"; p.fillRect(ax - 4, ay - 3, 8, 1); // pale page edges under the cover
-    for (const dx of [-11, 11]) { const fl = Math.sin(t * 8 + dx) > 0 ? 1 : 0; p.fillStyle = "#e8e0c0"; p.fillRect(ax + dx - 1, ay - 9, 2, 7); ditherGlow(p, ax + dx, ay - 11, 8, 10, "#ffce6a", 0.55); p.fillStyle = "#fff0c0"; p.fillRect(ax + dx, ay - 11 - fl, 1, 2); } // two burning candles at the ends
+    if (hasObj("SOUTH-TEMPLE", "BOOK")) {
+      // the large black book, lying open-side out in the centre of the altar
+      p.fillStyle = "#0c0a10"; p.fillRect(ax - 5, ay - 8, 10, 6); // black cover
+      p.fillStyle = "#26222e"; p.fillRect(ax - 5, ay - 8, 10, 1); p.fillRect(ax - 5, ay - 8, 1, 6); // its lamplit spine edge
+      p.fillStyle = "#d8d0b4"; p.fillRect(ax - 4, ay - 3, 8, 1); // pale page edges under the cover
+    }
+    if (hasObj("SOUTH-TEMPLE", "CANDLES")) for (const dx of [-11, 11]) { const fl = Math.sin(t * 8 + dx) > 0 ? 1 : 0; p.fillStyle = "#e8e0c0"; p.fillRect(ax + dx - 1, ay - 9, 2, 7); ditherGlow(p, ax + dx, ay - 11, 8, 10, "#ffce6a", 0.55); p.fillStyle = "#fff0c0"; p.fillRect(ax + dx, ay - 11 - fl, 1, 2); } // two burning candles at the ends
     // the hole down into the dark: a recessed pit, not a flat patch
     const hx = Math.round(pw * 0.82), hy2 = ph - Math.round(ph * 0.08);
     p.fillStyle = "#7a7058"; p.fillRect(hx - 12, hy2 - 2, 24, 2); // worn stone lip
@@ -1650,8 +1692,10 @@ function onRainbowPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: 
     // a waterfall in the distance (Aragain Falls)
     waterfall(p, Math.round(pw * 0.7), Math.round(pw * 0.1), Math.round(ph * 0.18), Math.round(ph * 0.5), t);
     // the rainbow you stand upon — a broad band sweeping across, foreground as a road
+    const solid = rf("END-OF-RAINBOW", "rainbowSolid");
     const cols = ["#d8504a", "#e0913a", "#e8d24a", "#5ab85a", "#4a8ad8", "#6a4ad8", "#a04ad8"];
-    for (let b = 0; b < 7; b++) { p.fillStyle = cols[b]; for (let x = 0; x < pw; x++) { const y = Math.round(ph * 0.7 + b * 4 + Math.sin(x * 0.012) * ph * 0.06); for (let yy = y; yy < y + 4; yy++) if (0.85 > dth(x, yy)) p.fillRect(x, yy, 1, 1); } }
+    for (let b = 0; b < 7; b++) { p.fillStyle = cols[b]; for (let x = 0; x < pw; x++) { const y = Math.round(ph * 0.7 + b * 4 + Math.sin(x * 0.012) * ph * 0.06); for (let yy = y; yy < y + 4; yy++) if ((solid ? 1.01 : 0.85) > dth(x, yy)) p.fillRect(x, yy, 1, 1); } }
+    if (solid) { p.fillStyle = "#fff6d8"; for (let x = 0; x < pw; x += 2) if (hash(x, 7) > 0.55) p.fillRect(x, Math.round(ph * 0.7 + Math.sin(x * 0.012) * ph * 0.06) - 1, 1, 1); } // the walkable edge, hard and glinting
     ditherGlow(p, pw * 0.5, ph * 0.78, pw * 0.5, ph * 0.12, "#fff0c0", 0.25); // luminous sheen
   });
 }
@@ -1690,8 +1734,10 @@ function loudRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: n
     darkArch(p, Math.round(pw * 0.03), floorY - Math.round(ph * 0.22), Math.round(pw * 0.07), Math.round(ph * 0.22), rim);
     darkArch(p, Math.round(pw * 0.9), floorY - Math.round(ph * 0.22), Math.round(pw * 0.07), Math.round(ph * 0.22), rim);
     darkArch(p, Math.round(pw * 0.47), 3, Math.round(pw * 0.08), Math.round(ph * 0.12), rim);
-    treasureGlint(p, Math.round(pw * 0.5), floorY + Math.round((ph - floorY) * 0.45), t, "#cfe0ea"); // platinum bar
-    p.fillStyle = "#cfe0ea"; p.fillRect(Math.round(pw * 0.5) - 5, floorY + Math.round((ph - floorY) * 0.45), 10, 3);
+    if (hasObj("LOUD-ROOM", "BAR")) {
+      treasureGlint(p, Math.round(pw * 0.5), floorY + Math.round((ph - floorY) * 0.45), t, "#cfe0ea"); // platinum bar
+      p.fillStyle = "#cfe0ea"; p.fillRect(Math.round(pw * 0.5) - 5, floorY + Math.round((ph - floorY) * 0.45), 10, 3);
+    }
   });
 }
 function domeRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -1756,6 +1802,7 @@ function treasureRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, 
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const lay = builtRoom(p, pw, ph, t, "stone"); const floorY = lay.by1; exitsBox(p, pw, ph, lay, ["DOWN"]);
     for (let i = 0; i < 6; i++) { const x = Math.round(pw * (0.2 + i * 0.1)); p.fillStyle = "#4a3a26"; fillDisc(p, x, floorY + Math.round((ph - floorY) * 0.46), 3); p.fillStyle = "#2e2415"; p.fillRect(x - 1, floorY + Math.round((ph - floorY) * 0.46), 2, 2); } // crumbling bags on the floor
+    if (!hasObj("TREASURE-ROOM", "CHALICE")) return; // the thief's prize, already lifted
     // the silver chalice (focal treasure): a goblet — bowl, stem, flared foot
     const cx = Math.round(pw * 0.42), cy = floorY + Math.round((ph - floorY) * 0.4); treasureGlint(p, cx, cy - 6, t, "#e6eef4");
     p.fillStyle = "#cfdae4"; p.fillRect(cx - 4, cy - 13, 8, 1); for (let yy = 0; yy < 4; yy++) { const ww = 4 - yy; p.fillRect(cx - ww, cy - 12 + yy, ww * 2, 1); } // bowl rim + tapering cup
@@ -1769,6 +1816,7 @@ function northTemplePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t
     const lay = builtRoom(p, pw, ph, t, "temple", 0.5, [228, 206, 150]); const floorY = lay.by1; exitsBox(p, pw, ph, lay, ["SOUTH", "EAST", "DOWN"]);
     for (const fx of [0.18, 0.82]) { const x = Math.round(pw * fx); p.fillStyle = "#8a8270"; p.fillRect(x - 4, Math.round(ph * 0.08), 8, floorY + Math.round((ph - floorY) * 0.5) - Math.round(ph * 0.08)); p.fillStyle = "#6a6454"; for (let y = Math.round(ph * 0.08); y < floorY; y += 4) p.fillRect(x - 4, y, 8, 1); p.fillStyle = "#a89e84"; p.fillRect(x - 6, Math.round(ph * 0.08), 12, 3); } // marble pillars (framing)
     p.fillStyle = "#7a7058"; for (let yy = 0; yy < 6; yy++) for (let xx = 0; xx < 4; xx++) p.fillRect(lay.bx1 - 14 + xx * 3, lay.by0 + 6 + yy * 4, 2, 2); // prayer inscription on the back wall
+    if (!hasObj("NORTH-TEMPLE", "BELL")) { void t; return; } // the bell has been carried off to Hades
     // the brass bell — a rounded shoulder flaring (convex) to a wide mouth, crown loop, clapper
     const bx = Math.round(pw * 0.5), byy = floorY + Math.round((ph - floorY) * 0.4), bh = 12, bhw = 8, top = byy - bh;
     p.fillStyle = "#9a7a22"; p.fillRect(bx - 1, top - 4, 2, 3); p.fillRect(bx - 2, top - 4, 4, 1); // crown loop on top
@@ -1857,14 +1905,16 @@ function landOfLivingDeadPixel(ctx: CanvasRenderingContext2D, w: number, h: numb
       p.globalAlpha = 0.5; p.fillStyle = "#1a2a34"; p.fillRect(x - 1, y, 1, 1); p.fillRect(x + 1, y, 1, 1); // hollow eyes
     }
     p.globalAlpha = 1;
-    // the crystal skull — a real skull in ice-clear crystal, softly alight
-    const sx = Math.round(pw * 0.58), sy = floorY + Math.round((ph - floorY) * 0.34);
-    p.fillStyle = "#2a4a5a"; p.fillRect(sx - 5, sy + 4, 11, 1); // its cold light pooling beneath it
-    p.fillStyle = "#d4eeff"; fillDisc(p, sx, sy - 2, 4); // cranium
-    p.fillRect(sx - 3, sy + 1, 7, 2); p.fillRect(sx - 2, sy + 3, 5, 1); // cheeks + jaw
-    p.fillStyle = "#2a4a5a"; p.fillRect(sx - 2, sy - 2, 2, 2); p.fillRect(sx + 1, sy - 2, 2, 2); p.fillRect(sx, sy + 1, 1, 1); // sockets + nasal
-    p.fillStyle = "#8ab4c4"; for (let j = -2; j <= 2; j++) if (j % 2 === 0) p.fillRect(sx + j, sy + 3, 1, 1); // teeth
-    p.fillStyle = "#ffffff"; if (Math.sin(t * 2.2) > 0.4) p.fillRect(sx - 2, sy - 4, 1, 1); // crystal glint
+    if (hasObj("LAND-OF-LIVING-DEAD", "SKULL")) {
+      // the crystal skull — a real skull in ice-clear crystal, softly alight
+      const sx = Math.round(pw * 0.58), sy = floorY + Math.round((ph - floorY) * 0.34);
+      p.fillStyle = "#2a4a5a"; p.fillRect(sx - 5, sy + 4, 11, 1); // its cold light pooling beneath it
+      p.fillStyle = "#d4eeff"; fillDisc(p, sx, sy - 2, 4); // cranium
+      p.fillRect(sx - 3, sy + 1, 7, 2); p.fillRect(sx - 2, sy + 3, 5, 1); // cheeks + jaw
+      p.fillStyle = "#2a4a5a"; p.fillRect(sx - 2, sy - 2, 2, 2); p.fillRect(sx + 1, sy - 2, 2, 2); p.fillRect(sx, sy + 1, 1, 1); // sockets + nasal
+      p.fillStyle = "#8ab4c4"; for (let j = -2; j <= 2; j++) if (j % 2 === 0) p.fillRect(sx + j, sy + 3, 1, 1); // teeth
+      p.fillStyle = "#ffffff"; if (Math.sin(t * 2.2) > 0.4) p.fillRect(sx - 2, sy - 4, 1, 1); // crystal glint
+    }
     darkArch(p, Math.round(pw * 0.46), floorY - Math.round(ph * 0.22), Math.round(pw * 0.08), Math.round(ph * 0.22), rim); // north
   });
 }
@@ -1872,6 +1922,7 @@ function atlantisRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, 
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const lay = builtRoom(p, pw, ph, t, "ancient", 0.55, [180, 210, 230]); const floorY = lay.by1; exitsBox(p, pw, ph, lay, ["UP", "SOUTH"]);
     p.fillStyle = "rgba(140,190,210,0.12)"; for (let i = 0; i < 7; i++) { const y = lay.by0 + Math.round((lay.by1 - lay.by0) * (0.1 + i * 0.12)); for (let x = lay.bx0; x < lay.bx1; x += 2) p.fillRect(x, y + Math.round(Math.sin(x * 0.1 + i + t * 0.5) * 2), 1, 1); } // water-caustic shimmer on the ancient back wall
+    if (!hasObj("ATLANTIS-ROOM", "TRIDENT")) return; // the relic is gone; the shrine stands empty
     const tx = Math.round(pw * 0.52), ty = floorY + Math.round((ph - floorY) * 0.34);
     // the crystal trident, leaning against nothing on the ancient floor: shaft,
     // crossbar, three barbed tines — glassy blues with a white spine
@@ -1945,7 +1996,7 @@ function aragainFallsPixel(ctx: CanvasRenderingContext2D, w: number, h: number, 
       const f = (y - ph * 0.8) / (ph * 0.2), drift = Math.sin(x * 0.05 + t * 0.8) * 2;
       if ((0.3 + f * 0.45) > dth(x + Math.round(drift), y)) { p.fillStyle = f > 0.5 ? "#eaf2f8" : "#b8ccdc"; p.fillRect(x, y, 1, 1); }
     }
-    rainbowArc(p, pw, ph); // the famous rainbow, spanning the falls
+    rainbowArc(p, pw, ph, rf("END-OF-RAINBOW", "rainbowSolid")); // the famous rainbow, spanning the falls
     void t;
   });
 }
@@ -1955,10 +2006,19 @@ function endOfRainbowPixel(ctx: CanvasRenderingContext2D, w: number, h: number, 
     whiteCliff(p, Math.round(pw * 0.84), pw, Math.round(ph * 0.08), Math.round(ph * 0.78)); // White Cliffs
     waterFill(p, pw, Math.round(ph * 0.5), Math.round(ph * 0.74), t, "#356a8c", "#234e6c"); // river
     sandBand(p, 0, pw, Math.round(ph * 0.74), ph); // rocky beach
+    const solid = rf("END-OF-RAINBOW", "rainbowSolid");
     const cols = ["#d8504a", "#e0913a", "#e8d24a", "#5ab85a", "#4a8ad8", "#6a4ad8", "#a04ad8"];
-    for (let b = 0; b < 7; b++) { p.fillStyle = cols[b]; for (let a = Math.PI * 1.05; a < Math.PI * 1.5; a += 0.01) { const x = Math.round(pw * 1.05 + Math.cos(a) * (ph * 0.85 - b * 2.5)), y = Math.round(ph * 1.1 + Math.sin(a) * (ph * 0.85 - b * 2.5)); if (y >= 0 && y < ph && x >= 0 && x < pw && 0.8 > dth(x, y)) p.fillRect(x, y, 1, 1); } } // rainbow east
-    // (no pot of gold here — it only appears once the sceptre is waved; the
-    // engine adds it to the room's objects and the composer/props render it)
+    for (let b = 0; b < 7; b++) { p.fillStyle = cols[b]; for (let a = Math.PI * 1.05; a < Math.PI * 1.5; a += 0.01) { const x = Math.round(pw * 1.05 + Math.cos(a) * (ph * 0.85 - b * 2.5)), y = Math.round(ph * 1.1 + Math.sin(a) * (ph * 0.85 - b * 2.5)); if (y >= 0 && y < ph && x >= 0 && x < pw && (solid ? 1.01 : 0.8) > dth(x, y)) p.fillRect(x, y, 1, 1); } } // rainbow east — solid once the sceptre is waved
+    if (solid && hasObj("END-OF-RAINBOW", "POT-OF-GOLD")) {
+      // the pot of gold, revealed at the rainbow's foot on the beach
+      const gx = Math.round(pw * 0.72), gy = ph - Math.round(ph * 0.12);
+      p.fillStyle = "#241a08"; p.fillRect(gx - 8, gy + 5, 17, 2); // its shadow in the sand
+      for (let yy = 0; yy < 7; yy++) { const wd = Math.round(7 - Math.abs(yy - 3) * 0.8); p.fillStyle = yy < 2 ? "#101418" : "#1c2228"; p.fillRect(gx - wd, gy - 2 + yy, wd * 2 + 1, 1); } // squat black pot
+      p.fillStyle = "#3a444c"; p.fillRect(gx - 7, gy - 2, 2, 5); // rim light on the iron
+      p.fillStyle = "#e8c24a"; p.fillRect(gx - 4, gy - 4, 9, 2); p.fillRect(gx - 2, gy - 5, 5, 1); // gold heaped over the brim
+      p.fillStyle = "#fff0b0"; p.fillRect(gx, gy - 5, 1, 1); p.fillRect(gx + 3, gy - 4, 1, 1); // coins catching the light
+      treasureGlint(p, gx - 3, gy - 7, t, "#ffe9a0");
+    }
     void hz;
   });
 }
@@ -2089,10 +2149,18 @@ function damBasePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
     waterFill(p, pw, footY, ph, t, "#356a8c", "#234e6c");
     for (let x = 0; x < pw; x++) if (hash(x, Math.floor(t * 6)) > (open ? 0.4 : 0.75)) { p.fillStyle = "#cfe0ea"; p.fillRect(x, footY + Math.round(hash(x, 9) * 4), 1, 1); } // white water at the foot
     whiteCliff(p, 0, Math.round(pw * 0.1), Math.round(ph * 0.3), ph); whiteCliff(p, Math.round(pw * 0.9), pw, Math.round(ph * 0.3), ph); // the gorge walls
-    // the folded pile of plastic (the boat, deflated) on the near bank
-    const bx2 = Math.round(pw * 0.44), by2 = ph - 8;
-    p.fillStyle = "#3a2a44"; p.fillRect(bx2 - 2, by2 - 1, 16, 5);
-    p.fillStyle = "#7a5a8a"; p.fillRect(bx2, by2, 12, 3); p.fillStyle = "#9a7aac"; p.fillRect(bx2, by2, 12, 1); p.fillStyle = "#54406a"; p.fillRect(bx2 + 4, by2 + 1, 2, 2); // folds
+    // the plastic boat on the near bank: a folded pile — or, pumped up, seaworthy
+    const bx2 = Math.round(pw * 0.42), by2 = ph - 8;
+    if (rf("DAM-BASE", "boatInflated") && hasObj("DAM-BASE", "INFLATED-BOAT")) {
+      p.fillStyle = "#241a2e"; p.fillRect(bx2 - 2, by2 + 3, 28, 2); // shadow under the hull
+      for (let r = 0; r < 6; r++) { const inset = r < 2 ? 2 - r : Math.round((r - 1) * 0.9); const wd = 26 - inset * 2; p.fillStyle = r === 0 ? "#a88aba" : r < 3 ? "#7a5a8a" : "#54406a"; p.fillRect(bx2 + inset, by2 - 3 + r, wd, 1); } // taut tube hull, bow tapering
+      p.fillStyle = "#c8aad8"; p.fillRect(bx2 + 3, by2 - 3, 21, 1); // gunwale catching the light
+      p.fillStyle = "#38284a"; p.fillRect(bx2 + 7, by2 - 1, 3, 2); p.fillRect(bx2 + 16, by2 - 1, 3, 2); // thwart seats
+      p.fillStyle = "#e8e4da"; p.fillRect(bx2 + 11, by2, 4, 2); // the tan label in the bottom
+    } else if (hasObj("DAM-BASE", "INFLATABLE-BOAT")) {
+      p.fillStyle = "#3a2a44"; p.fillRect(bx2 - 2, by2 - 1, 16, 5);
+      p.fillStyle = "#7a5a8a"; p.fillRect(bx2, by2, 12, 3); p.fillStyle = "#9a7aac"; p.fillRect(bx2, by2, 12, 1); p.fillStyle = "#54406a"; p.fillRect(bx2 + 4, by2 + 1, 2, 2); // folds
+    }
   });
 }
 function damLobbyPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -2132,6 +2200,7 @@ function sandyBeachPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t:
     const wy = riverBase(p, pw, ph, t, false);
     sandBand(p, 0, pw, wy + Math.round((ph - wy) * 0.3), ph); // large sandy beach
     darkArch(p, Math.round(pw * 0.8), wy - 2, Math.round(pw * 0.1), Math.round(ph * 0.12), "#a8975f"); // passage half-buried in sand (NE)
+    if (!hasObj("SANDY-BEACH", "SHOVEL")) return; // taken to dig with
     // the shovel, planted blade-down in the sand
     const sx = Math.round(pw * 0.45), sy = ph - Math.round(ph * 0.14);
     p.fillStyle = "#6a4a2a"; p.fillRect(sx, sy - 16, 2, 12); // wooden shaft
@@ -2277,13 +2346,15 @@ function gasRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
       }
     }
     for (let x = 0; x < pw; x += 2) { const cy = 16 + Math.round(Math.sin(x * 0.06 + t * 0.5) * 3); if (0.4 > dth(x, cy)) { p.fillStyle = "#4a5a28"; p.fillRect(x, cy, 2, 1); } } // gas pooled along the ceiling
-    // the sapphire-encrusted bracelet: a pixel-honest gold hoop with blue stones
-    const bx = Math.round(pw * 0.5), by = floorY + Math.round((ph - floorY) * 0.42);
-    treasureGlint(p, bx, by - 3, t, "#5a9aff");
-    p.fillStyle = "#caa24a"; p.fillRect(bx - 5, by - 1, 10, 1); p.fillRect(bx - 6, by, 12, 2); p.fillRect(bx - 5, by + 2, 10, 1); // the hoop, seen at a shallow angle
-    p.fillStyle = "#8a6a24"; p.fillRect(bx - 4, by + 1, 8, 1); // its dark inner rim
-    p.fillStyle = "#4a8aff"; for (const dx of [-5, -2, 1, 4]) p.fillRect(bx + dx, by, 1, 1); // sapphires
-    p.fillStyle = "#bfe0ff"; p.fillRect(bx - 2, by, 1, 1); // one catching the lamp
+    if (hasObj("GAS-ROOM", "BRACELET")) {
+      // the sapphire-encrusted bracelet: a pixel-honest gold hoop with blue stones
+      const bx = Math.round(pw * 0.5), by = floorY + Math.round((ph - floorY) * 0.42);
+      treasureGlint(p, bx, by - 3, t, "#5a9aff");
+      p.fillStyle = "#caa24a"; p.fillRect(bx - 5, by - 1, 10, 1); p.fillRect(bx - 6, by, 12, 2); p.fillRect(bx - 5, by + 2, 10, 1); // the hoop, seen at a shallow angle
+      p.fillStyle = "#8a6a24"; p.fillRect(bx - 4, by + 1, 8, 1); // its dark inner rim
+      p.fillStyle = "#4a8aff"; for (const dx of [-5, -2, 1, 4]) p.fillRect(bx + dx, by, 1, 1); // sapphires
+      p.fillStyle = "#bfe0ff"; p.fillRect(bx - 2, by, 1, 1); // one catching the lamp
+    }
   });
 }
 function ladderTopPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -2494,10 +2565,10 @@ function maze5Pixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: numb
     p.fillStyle = "#c8c2b0"; for (let i = 0; i < 5; i++) p.fillRect(sx + 4 + i * 4, sy - 1, 3, 1); // spine
     for (let i = 0; i < 4; i++) { p.fillRect(sx + 5 + i * 4, sy - 4, 1, 6); } // ribs
     // its scattered gear: burned-out lantern, bag of coins, rusty knife, skeleton key
-    p.fillStyle = "#4a4640"; p.fillRect(sx + 24, sy - 4, 5, 5); p.fillStyle = "#2a2824"; p.fillRect(sx + 24, sy - 4, 5, 1); // dead lantern
-    treasureGlint(p, sx + 36, sy, t, "#e8c24a"); p.fillStyle = "#6a4f2c"; p.fillRect(sx + 33, sy - 1, 7, 4); // bag of coins
-    p.fillStyle = "#9a7a5a"; p.fillRect(sx - 14, sy + 2, 8, 1); p.fillStyle = "#6a4a2a"; p.fillRect(sx - 6, sy + 1, 2, 3); // rusty knife
-    p.fillStyle = "#c8a84a"; p.fillRect(sx - 22, sy, 4, 2); p.fillRect(sx - 22, sy - 2, 2, 4); // skeleton key
+    if (hasObj("MAZE-5", "BURNED-OUT-LANTERN")) { p.fillStyle = "#4a4640"; p.fillRect(sx + 24, sy - 4, 5, 5); p.fillStyle = "#2a2824"; p.fillRect(sx + 24, sy - 4, 5, 1); } // dead lantern
+    if (hasObj("MAZE-5", "BAG-OF-COINS")) { treasureGlint(p, sx + 36, sy, t, "#e8c24a"); p.fillStyle = "#6a4f2c"; p.fillRect(sx + 33, sy - 1, 7, 4); } // bag of coins
+    if (hasObj("MAZE-5", "RUSTY-KNIFE")) { p.fillStyle = "#9a7a5a"; p.fillRect(sx - 14, sy + 2, 8, 1); p.fillStyle = "#6a4a2a"; p.fillRect(sx - 6, sy + 1, 2, 3); } // rusty knife
+    if (hasObj("MAZE-5", "KEYS")) { p.fillStyle = "#c8a84a"; p.fillRect(sx - 22, sy, 4, 2); p.fillRect(sx - 22, sy - 2, 2, 4); } // skeleton key
   });
 }
 function gratingRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -2592,6 +2663,7 @@ function arches(p: CanvasRenderingContext2D, pw: number, ph: number, floorY: num
 function forestDimPixel(seed: number) {
   return (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const horizon = forestBackdrop(p, pw, ph, t, "none");
+    fireflies(p, pw, ph, horizon, t + seed * 3);
     for (let i = 0; i < 7; i++) pixelTree(p, pw * (0.04 + i * 0.07 + hash(seed, i) * 0.03), horizon + 6, ph * (0.34 + hash(seed + 1, i) * 0.1), pw * 0.055, t, true);
     if (seed === 2) { // a mossy split boulder marks this stretch of forest
       const bx = Math.round(pw * 0.6), by = ph - Math.round(ph * 0.1);
@@ -2640,6 +2712,7 @@ function mountainsPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: 
 function clearingPixel(grating: boolean) {
   return (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const horizon = forestBackdrop(p, pw, ph, t, "soft");
+    fireflies(p, pw, ph, horizon, t + (grating ? 5 : 0), 2);
     // the open clearing floor: a moonlit grass oval breaking the undergrowth
     const ccx = pw * 0.5, ccy = horizon + (ph - horizon) * 0.5, crx = pw * 0.34, cry = (ph - horizon) * 0.52;
     for (let y = horizon; y < ph; y++) for (let x = 0; x < pw; x++) {
@@ -3079,9 +3152,9 @@ function maintenanceRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: numbe
       p.fillStyle = "#0c0e12"; p.fillRect(cx2 + 1, cy2 + 2, cw2 - 2, 3); // gaping open, emptied
       p.fillStyle = "#5c666f"; p.fillRect(cx2 - 1, cy2 - 2, cw2 + 2, 2); p.fillStyle = "#252b32"; p.fillRect(cx2 + (cw2 >> 1) - 1, cy2 - 1, 2, 1); // lid thrown back + latch
     }
-    p.fillStyle = "#7a8a92"; p.fillRect(px + 14, floorY + Math.round((ph - floorY) * 0.4), 10, 2); p.fillRect(px + 22, floorY + Math.round((ph - floorY) * 0.4) - 1, 2, 4); // wrench with jaw
-    p.fillStyle = "#6a5030"; p.fillRect(px - 24, floorY + Math.round((ph - floorY) * 0.55), 8, 2); p.fillStyle = "#9aa4ac"; p.fillRect(px - 16, floorY + Math.round((ph - floorY) * 0.55), 4, 1); // screwdriver, handle + shank
-    p.fillStyle = "#4a5a3a"; p.fillRect(px - 4, floorY + Math.round((ph - floorY) * 0.62), 7, 3); p.fillStyle = "#5c7048"; p.fillRect(px - 4, floorY + Math.round((ph - floorY) * 0.62), 7, 1); // the tube of viscous material
+    if (hasObj("MAINTENANCE-ROOM", "WRENCH")) { p.fillStyle = "#7a8a92"; p.fillRect(px + 14, floorY + Math.round((ph - floorY) * 0.4), 10, 2); p.fillRect(px + 22, floorY + Math.round((ph - floorY) * 0.4) - 1, 2, 4); } // wrench with jaw
+    if (hasObj("MAINTENANCE-ROOM", "SCREWDRIVER")) { p.fillStyle = "#6a5030"; p.fillRect(px - 24, floorY + Math.round((ph - floorY) * 0.55), 8, 2); p.fillStyle = "#9aa4ac"; p.fillRect(px - 16, floorY + Math.round((ph - floorY) * 0.55), 4, 1); } // screwdriver, handle + shank
+    if (hasObj("MAINTENANCE-ROOM", "TUBE")) { p.fillStyle = "#4a5a3a"; p.fillRect(px - 4, floorY + Math.round((ph - floorY) * 0.62), 7, 3); p.fillStyle = "#5c7048"; p.fillRect(px - 4, floorY + Math.round((ph - floorY) * 0.62), 7, 1); } // the tube of viscous material
     void t;
   });
 }
@@ -3113,7 +3186,7 @@ function batRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
     p.fillRect(bx - 1, by, 3, 5); p.fillRect(bx - 1, by - 2, 1, 2); p.fillRect(bx + 1, by - 2, 1, 2); // body + ears
     for (let k = 0; k < 8; k++) { const wy2 = by + flap + Math.round(Math.abs(k - 3.5) * (flap > 0 ? 0.5 : -0.5)); p.fillRect(bx - 10 + k, wy2, 1, 2); p.fillRect(bx + 3 + k, wy2, 1, 2); } // membranous wings, angling with the beat
     p.fillStyle = "#4a2a34"; p.fillRect(bx, by + 1, 1, 1); // its mad little eye
-    { // the exquisite jade figurine — a small seated idol, actually carved
+    if (hasObj("BAT-ROOM", "JADE")) { // the exquisite jade figurine — a small seated idol, actually carved
       const jx = Math.round(pw * 0.5), jy = floorY + Math.round((ph - floorY) * 0.4);
       p.fillStyle = "#0e2a18"; p.fillRect(jx - 4, jy + 3, 9, 1); // its shadow
       p.fillStyle = "#2e8a52"; p.fillRect(jx - 3, jy, 7, 3); // crossed-leg base
@@ -3152,7 +3225,14 @@ function reservoirShorePixel(north: boolean) {
     caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
     // the water fills the MIDDLE distance only — you stand on a real shore
     const wTop = Math.round(ph * 0.44), wBot = Math.round(ph * 0.72);
-    waterFill(p, pw, wTop, wBot, t, "#31607e", "#1e4460");
+    const drained = rf("RESERVOIR", "drained");
+    if (drained) { // the gates stand open downstream — a basin of cracked mud
+      for (let y = wTop; y < wBot; y++) for (let x = 0; x < pw; x++) { const k = hash(x >> 2, y >> 2); p.fillStyle = k > 0.7 ? "#3e3320" : k < 0.22 ? "#1c1710" : "#2e2618"; p.fillRect(x, y, 1, 1); }
+      p.fillStyle = "#151009"; for (let i = 0; i < 12; i++) { let xx = Math.round(hash(i, 4) * pw); for (let k = 0; k < 10; k++) { xx += Math.round((hash(xx, k) - 0.5) * 3); p.fillRect(xx, wTop + 3 + Math.round(hash(i, 5) * (wBot - wTop - 6)) + (k >> 2), 2, 1); } } // drying cracks
+      p.fillStyle = "#3a5a6e"; for (let i = 0; i < 8; i++) p.fillRect(Math.round(hash(i, 7) * pw), wTop + 2 + Math.round(hash(i, 8) * (wBot - wTop - 4)), 3, 1); // last stranded puddles
+    } else {
+      waterFill(p, pw, wTop, wBot, t, "#31607e", "#1e4460");
+    }
     p.fillStyle = "#0e2334"; p.fillRect(0, wTop - 1, pw, 1); // far waterline against the rock
     // your lamplit shore: wet rock shelving into the reservoir
     for (let y = wBot; y < ph; y++) for (let x = 0; x < pw; x++) {
@@ -3160,9 +3240,9 @@ function reservoirShorePixel(north: boolean) {
       p.fillStyle = k > 0.78 ? (f < 0.3 ? "#4a4438" : "#3e382c") : k > 0.3 ? "#332e24" : "#26221a";
       p.fillRect(x, y, 1, 1);
     }
-    p.fillStyle = "#5c6f7e"; for (let x = 0; x < pw; x += 2) if (Math.sin(x * 0.2 + t * 2.4) > 0.4) p.fillRect(x, wBot + (x % 2), 2, 1); // the reservoir lapping the shore
+    if (!drained) { p.fillStyle = "#5c6f7e"; for (let x = 0; x < pw; x += 2) if (Math.sin(x * 0.2 + t * 2.4) > 0.4) p.fillRect(x, wBot + (x % 2), 2, 1); } // the reservoir lapping the shore
     arches(p, pw, ph, ph - 6, rim, north ? ["NORTH"] : ["EAST", "WEST"]);
-    if (north) { // the hand-held air pump, abandoned on the north shore
+    if (north && hasObj("RESERVOIR-NORTH", "PUMP")) { // the hand-held air pump, abandoned on the north shore
       const ax = Math.round(pw * 0.62), ay = ph - Math.round((ph - wBot) * 0.5);
       p.fillStyle = "#101216"; p.fillRect(ax - 7, ay - 6, 15, 9);
       p.fillStyle = "#3a3a42"; p.fillRect(ax - 6, ay - 5, 12, 7); p.fillStyle = "#5a5a64"; p.fillRect(ax - 6, ay - 5, 12, 1); // the barrel
@@ -3367,6 +3447,7 @@ const SCENES: Record<string, SceneDraw> = {
 interface CavePal { wallTop: number[]; wallBot: number[]; wallHi: number[]; floorTop: number[]; floorBot: number[]; floorHi: number[]; ceil: string; light?: { x: number; y: number; rx: number; ry: number; col: number[]; peak: number }; }
 function caveBackdrop(p: CanvasRenderingContext2D, pw: number, ph: number, pal: CavePal, t = 0) {
   const floorY = Math.round(ph * 0.6);
+  const flick = 0.95 + 0.05 * (0.5 + 0.5 * Math.sin(t * 9 + Math.sin(t * 23) * 1.6)); // the lamp breathes, faintly
   // an UNEVEN rock floor edge (not a straight seam) — organic, not architectural
   const floorEdge = (x: number) => floorY + Math.round((Math.sin(x * 0.05) + Math.sin(x * 0.13 + 2)) * ph * 0.018 + (hash(Math.floor(x / 5), 9) - 0.5) * ph * 0.035);
   const img = p.createImageData(pw, ph), d = img.data;
@@ -3378,7 +3459,7 @@ function caveBackdrop(p: CanvasRenderingContext2D, pw: number, ph: number, pal: 
       if (n6 > 0.68) c = mix(c, pal.wallHi, 0.2); else if (n6 < 0.26) c = mix(c, [0, 0, 0], 0.24); // big rock blotches
       if (n3 > 0.86) c = mix(c, pal.wallHi, 0.16); else if (n3 < 0.12) c = mix(c, [0, 0, 0], 0.16); // fine grain
     } else { c = mix(pal.floorTop, pal.floorBot, (y - fe) / (ph - fe)); const n = hash(Math.floor(x / 4), Math.floor(y / 4)); if (n > 0.82) c = mix(c, pal.floorHi, 0.22); else if (n < 0.12) c = mix(c, [0, 0, 0], 0.28); }
-    if (pal.light) { const dx = (x - pal.light.x) / pal.light.rx, dy = (y - pal.light.y) / pal.light.ry, dd = Math.sqrt(dx * dx + dy * dy), gl = Math.max(0, 1 - dd); if (gl > 0) c = mix(c, pal.light.col, gl * gl * pal.light.peak); }
+    if (pal.light) { const dx = (x - pal.light.x) / pal.light.rx, dy = (y - pal.light.y) / pal.light.ry, dd = Math.sqrt(dx * dx + dy * dy), gl = Math.max(0, 1 - dd); if (gl > 0) c = mix(c, pal.light.col, gl * gl * pal.light.peak * flick); }
     sp(d, pw, x, y, qcol(c, th));
   }
   p.putImageData(img, 0, 0);
@@ -3480,10 +3561,12 @@ function riverBase(p: CanvasRenderingContext2D, pw: number, ph: number, t: numbe
   for (let y = wy; y < ph; y++) for (let x = 0; x < pw; x++) { const v = Math.sin(x * 0.1 + t * (rough ? 3 : 1.2) + y * 0.3) * 0.5 + 0.5; if (v * 0.65 > dth(x, y)) { p.fillStyle = ((x + y) & 1) ? "#234e6c" : "#356a8c"; p.fillRect(x, y, 1, 1); } if (rough && v > 0.86 && hash(x, y + Math.floor(t * 4)) > 0.6) { p.fillStyle = "#c4d8e4"; p.fillRect(x, y, 1, 1); } }
   return wy;
 }
-function rainbowArc(p: CanvasRenderingContext2D, pw: number, ph: number) {
+function rainbowArc(p: CanvasRenderingContext2D, pw: number, ph: number, solid = false) {
   const cols = ["#d8504a", "#e0913a", "#e8d24a", "#5ab85a", "#4a8ad8", "#6a4ad8", "#a04ad8"];
   const cx = pw * 0.5, cy = ph * 1.25, R = ph * 1.05;
-  for (let b = 0; b < 7; b++) { const r = R - b * 2.5; for (let a = Math.PI * 1.04; a < Math.PI * 1.96; a += 0.008) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if (y >= 0 && y < ph && x >= 0 && x < pw && 0.75 > dth(x, y)) { p.fillStyle = cols[b]; p.fillRect(x, y, 1, 1); } } }
+  const th = solid ? 1.01 : 0.75; // solid: every pixel commits — you could walk on it
+  for (let b = 0; b < 7; b++) { const r = R - b * 2.5; for (let a = Math.PI * 1.04; a < Math.PI * 1.96; a += 0.008) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if (y >= 0 && y < ph && x >= 0 && x < pw && th > dth(x, y)) { p.fillStyle = cols[b]; p.fillRect(x, y, 1, 1); } } }
+  if (solid) { p.fillStyle = "#fff6d8"; const r = R + 1.5; for (let a = Math.PI * 1.04; a < Math.PI * 1.96; a += 0.02) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if (y >= 0 && y < ph && x >= 0 && x < pw && hash(x, 3) > 0.5) p.fillRect(x, y, 1, 1); } } // a hard glinting upper edge
 }
 function waterfall(p: CanvasRenderingContext2D, x: number, wd: number, topY: number, botY: number, t: number) {
   const H = Math.max(1, botY - topY);

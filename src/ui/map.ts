@@ -342,7 +342,7 @@ export class GameMap {
       <div class="map-sub">FOUND HERE</div>
       <ul class="map-items">${items}</ul>
       <div class="map-sub">EXITS</div>
-      <div class="map-exits">${exitDirs.length ? exitDirs.map((d) => untried.includes(d) ? `<b class="map-untried">${d.toLowerCase()}…</b>` : d.toLowerCase()).join(" · ") : "—"}</div>`;
+      <div class="map-exits">${exitDirs.length ? exitDirs.map((d) => untried.includes(d) ? `<b class="map-untried">${d.toLowerCase()}</b>` : d.toLowerCase()).join(" · ") : "—"}</div>`;
   }
 
   private save() { try { localStorage.setItem(this.saveKey, JSON.stringify({ current: this.current, nodes: [...this.nodes.values()].map((n) => ({ id: n.id, name: n.name, items: n.items })) })); } catch { /* quota */ } }

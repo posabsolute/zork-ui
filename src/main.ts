@@ -111,6 +111,15 @@ function detectInteractions(cmd: string, fresh: string): boolean {
   // SHAFT-ROOM / LOWER-SHAFT: lower or raise the basket on the chain
   if (/^lower\s+(?:the\s+)?basket\b/.test(cmd) && ok) setRoomFlag("SHAFT-ROOM", "basketLowered", true);
   if (/^raise\s+(?:the\s+)?basket\b/.test(cmd) && ok) setRoomFlag("SHAFT-ROOM", "basketLowered", false);
+  // CYCLOPS: fed and watered, he falls asleep (fleeing through the wall overrides)
+  if (/cyclops/i.test(fresh) && /(asleep|falls? .*sleep|slumber|snor)/i.test(fresh)) setRoomFlag("CYCLOPS-ROOM", "cyclopsAsleep", true);
+  if (/cyclops/i.test(fresh) && /(wakes|awakens|yawns and stares)/i.test(fresh)) setRoomFlag("CYCLOPS-ROOM", "cyclopsAsleep", false);
+  // THE SCEPTRE: waved, the rainbow becomes solid (all three rainbow rooms read this key)
+  if (/rainbow.*(solid|walkable)/i.test(fresh)) setRoomFlag("END-OF-RAINBOW", "rainbowSolid", true);
+  if (/rainbow.*(run-of-the-mill|shimmer|insubstantial)/i.test(fresh)) setRoomFlag("END-OF-RAINBOW", "rainbowSolid", false);
+  // THE MAGIC BOAT: pumped up at the dam base
+  if (/(boat|plastic).*inflate|inflates|seaworthy/i.test(fresh) && /^(?:inflate|pump)/.test(cmd)) setRoomFlag("DAM-BASE", "boatInflated", true);
+  if (/^deflate/.test(cmd) && /deflate/i.test(fresh)) setRoomFlag("DAM-BASE", "boatInflated", false);
   // THE THIEF: when he wanders through and robs you, show him striding through the room
   if (/seedy-looking individual|abstracted some valuables|(?:thief|individual).*(?:wandered|wanders) through|just wandered through the room/i.test(fresh)) flashThief();
   const changed = was !== JSON.stringify(roomState);
@@ -163,6 +172,9 @@ rooms.onChange((change) => {
   compass.update(change.room);
   gameMap?.discover(change);
   currentRoom = change.room;
+  // record the room's real contents so scenes stop drawing props the player took
+  setRoomFlag(change.room.id, "objects", (change.contents ?? []) as unknown as string[]);
+  try { localStorage.setItem(ROOMS_KEY, JSON.stringify(roomState)); } catch { /* quota */ }
   applyScene(change.room, change.enteredFrom);
 });
 
