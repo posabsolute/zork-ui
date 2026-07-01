@@ -174,6 +174,7 @@ async function startGame() {
     rooms.objects,
     MAP_KEY,
   );
+  (window as any).__map = gameMap; // Dev: inspect layout/nodes from the console
 
   const game = await bootZork({
     storyUrl: "./zork1.z3",

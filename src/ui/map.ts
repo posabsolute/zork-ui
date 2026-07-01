@@ -3,11 +3,13 @@
  * players actually mapped the Empire in 1980 — room names in boxes, ink lines
  * between them, U/D marks at stairways, and "?" at every exit not yet taken.
  *
- * Conventions (from IF hand-maps + dungeon-crawler automaps):
- *  - rooms are LABELLED BOXES on faint graph paper, laid out by real compass exits
+ * Conventions (from Infocom/Trizbort hand-maps + dungeon-crawler automaps):
+ *  - rooms are LABELLED BOXES on faint graph paper, laid out by real compass
+ *    exits — a north exit puts the far room NORTH, always (direction-true)
  *  - one FLOOR at a time (tabs), like a crawler automap; ▲/▼ mark the stairs
- *  - untaken exits end in a gold "?" stub — the map is a to-do list
- *  - you are "@", pulsing, roguelike-style; the view auto-centres on you
+ *  - an exit not yet taken is a dashed line trailing off into the dark
+ *  - your room is the INVERTED, glowing box (crawler-style highlight)
+ *  - one-way passages get an arrowhead midway (Infocom convention)
  *  - gold ◆ pip = something notable was seen in that room
  * Scroll to zoom, drag to pan, hover for a tooltip, click to inspect.
  */
@@ -68,7 +70,7 @@ export class GameMap {
       </div>
       <div class="map-floors"></div>
       <div class="map-stage"><canvas></canvas></div>
-      <div class="map-legend"><span class="lg-at">@</span> you&nbsp;&nbsp;<span class="lg-q">?</span> untried&nbsp;&nbsp;<span class="lg-st">▲▼</span> stairs&nbsp;&nbsp;<span class="lg-it">◆</span> seen</div>
+      <div class="map-legend"><span class="lg-at">█</span> you&nbsp;&nbsp;<span class="lg-q">╌╌</span> unexplored&nbsp;&nbsp;<span class="lg-st">▲▼</span> stairs&nbsp;&nbsp;<span class="lg-it">◆</span> seen</div>
       <div class="map-info"></div>
       <div class="map-tip" style="display:none"></div>`;
     this.canvas = this.el.querySelector(".map-stage canvas") as HTMLCanvasElement;
@@ -130,9 +132,15 @@ export class GameMap {
   private relayout() {
     const ids = [...this.nodes.keys()]; if (!ids.length) return;
     const placed = new Map<string, { x: number; y: number; z: number }>();
-    const occ = new Set<string>();
-    const put = (id: string, x: number, y: number, z: number) => { placed.set(id, { x, y, z }); occ.add(`${x},${y},${z}`); };
-    const free = (x: number, y: number, z: number, dx: number, dy: number): [number, number] => { let g = 0; while (occ.has(`${x},${y},${z}`) && g++ < 60) { x += dx || 1; y += dy; } return [x, y]; };
+    const occ = new Map<string, string>(); // "x,y,z" -> room id
+    const put = (id: string, x: number, y: number, z: number) => { placed.set(id, { x, y, z }); occ.set(`${x},${y},${z}`, id); };
+    // walk FURTHER IN THE EXIT'S OWN DIRECTION until a cell is free — a north
+    // exit must land north, never drift sideways
+    const free = (x: number, y: number, z: number, dx: number, dy: number): [number, number] => {
+      let sx = dx, sy = dy; if (!sx && !sy) sx = 1;
+      let g = 0; while (occ.has(`${x},${y},${z}`) && g++ < 60) { x += sx; y += sy; }
+      return [x, y];
+    };
     const anchor = this.nodes.has("WEST-OF-HOUSE") ? "WEST-OF-HOUSE" : ids[0];
     put(anchor, 0, 0, 0);
     const q = [anchor];
@@ -142,7 +150,7 @@ export class GameMap {
         const e = room.exits[dir]; if (!e || !e.to) continue; const to = e.to;
         if (!this.nodes.has(to) || placed.has(to)) continue;
         if (dir === "UP" || dir === "DOWN") { const z = pos.z + (dir === "UP" ? -1 : 1); const [x, y] = free(pos.x, pos.y, z, 1, 0); put(to, x, y, z); q.push(to); }
-        else { const d = DELTA[dir]; if (!d) continue; const [x, y] = free(pos.x + d[0], pos.y + d[1], pos.z, d[0] || 0, d[1]); put(to, x, y, pos.z); q.push(to); }
+        else { const d = DELTA[dir]; if (!d) continue; const [x, y] = free(pos.x + d[0], pos.y + d[1], pos.z, d[0], d[1]); put(to, x, y, pos.z); q.push(to); }
       }
     }
     // rooms only reachable backwards (one-way passages): hang them off any placed neighbour
@@ -151,7 +159,7 @@ export class GameMap {
       changed = false;
       for (const id of ids) {
         if (placed.has(id)) continue; const room = this.rooms[id]; let done = false;
-        if (room) for (const dir of ORDER) { const e = room.exits[dir]; if (e?.to && placed.has(e.to)) { const pos = placed.get(e.to)!; const dz = dir === "UP" ? 1 : dir === "DOWN" ? -1 : 0; const d = DELTA[dir] || [0, 0]; const [x, y] = free(pos.x - d[0], pos.y - d[1], pos.z + dz, -(d[0] || 1), -d[1]); put(id, x, y, pos.z + dz); changed = done = true; break; } }
+        if (room) for (const dir of ORDER) { const e = room.exits[dir]; if (e?.to && placed.has(e.to)) { const pos = placed.get(e.to)!; const dz = dir === "UP" ? 1 : dir === "DOWN" ? -1 : 0; const d = DELTA[dir] || [0, 0]; const [x, y] = free(pos.x - d[0], pos.y - d[1], pos.z + dz, -d[0], -d[1]); put(id, x, y, pos.z + dz); changed = done = true; break; } }
         if (done) continue;
         for (const pid of [...placed.keys()]) { const pr = this.rooms[pid]; if (!pr) continue; for (const dir of ORDER) { const e = pr.exits[dir]; if (e?.to === id) { const pos = placed.get(pid)!; const dz = dir === "UP" ? -1 : dir === "DOWN" ? 1 : 0; const d = DELTA[dir] || [0, 0]; const [x, y] = free(pos.x + d[0], pos.y + d[1], pos.z + dz, d[0] || 1, d[1]); put(id, x, y, pos.z + dz); changed = done = true; break; } } if (done) break; }
       }
@@ -168,7 +176,7 @@ export class GameMap {
   private hit(e: MouseEvent): MapNode | null {
     const r = this.canvas.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
-    let best: MapNode | null = null, bd = 26 * this.zoom;
+    let best: MapNode | null = null, bd = 40 * this.zoom;
     for (const n of this.nodes.values()) { if (n.z !== this.floor) continue; const [sx, sy] = this.proj(n); const d = Math.hypot(sx - mx, sy - my); if (d < bd) { bd = d; best = n; } }
     return best;
   }
@@ -194,7 +202,7 @@ export class GameMap {
     if (!floors.includes(this.floor)) this.floor = floors.includes(curZ) ? curZ : (floors[0] ?? 0);
     this.floorsEl.style.display = floors.length > 1 ? "flex" : "none";
     this.floorsEl.innerHTML = floors.map((z) =>
-      `<button data-z="${z}" class="${z === this.floor ? "on" : ""}">${this.floorName(z)}${z === curZ ? ' <span class="fl-at">@</span>' : ""}</button>`).join("");
+      `<button data-z="${z}" class="${z === this.floor ? "on" : ""}">${this.floorName(z)}${z === curZ ? ' <span class="fl-at">●</span>' : ""}</button>`).join("");
 
     const stage = this.canvas.parentElement as HTMLElement;
     const cw = stage.clientWidth, ch = stage.clientHeight, dpr = window.devicePixelRatio || 1;
@@ -206,15 +214,15 @@ export class GameMap {
     const ns = all.filter((n) => n.z === this.floor);
     if (!all.length) { this.info.innerHTML = `<div class="map-dim">Explore to reveal the map.</div>`; return; }
 
-    // ── scale: auto-fit this floor unless the player has taken over the zoom ──
+    // ── scale: auto-fit this floor, but NEVER below legibility — every box
+    // always shows its name (the whole point of a map); overflow pans instead
     const minx = Math.min(...ns.map((n) => n.x)), maxx = Math.max(...ns.map((n) => n.x));
     const miny = Math.min(...ns.map((n) => n.y)), maxy = Math.max(...ns.map((n) => n.y));
     const cols = Math.max(1, maxx - minx + 1), rows = Math.max(1, maxy - miny + 1);
-    const fit = Math.max(26, Math.min(64, Math.floor(Math.min((cw - 40) / cols, (ch - 40) / rows))));
+    const fit = Math.max(52, Math.min(84, Math.floor(Math.min((cw - 30) / cols, (ch - 30) / rows))));
     const cell = Math.round(fit * (this.userZoomed ? this.zoom : 1));
     if (!this.userZoomed) this.zoom = 1;
-    const bw = Math.max(14, Math.round(cell * 0.72)), bh = Math.max(10, Math.round(cell * 0.44)); // room box
-    const showLabels = cell >= 58; // room for a pencilled name under each box
+    const bw = Math.max(38, Math.round(cell * 0.86)), bh = Math.max(22, Math.round(cell * 0.52)); // room box, sized for its name
 
     // centre on the player's room (follow) or the floor's cloud
     const centreNode = this.followPlayer && this.current && this.nodes.get(this.current)?.z === this.floor ? this.nodes.get(this.current)! : null;
@@ -226,25 +234,33 @@ export class GameMap {
 
     // ── graph paper ──
     p.fillStyle = PAPER_GRID;
-    const g = Math.max(8, cell >> 1);
+    const g = Math.max(10, cell >> 1);
     for (let x = ((ox % g) + g) % g; x < cw; x += g) p.fillRect(Math.round(x), 0, 1, ch);
     for (let y = ((oy % g) + g) % g; y < ch; y += g) p.fillRect(0, Math.round(y), cw, 1);
 
     const pulse = (Date.now() / 600) % 2 < 1; // slow heartbeat
-    p.font = `bold ${Math.max(8, Math.min(10, Math.round(bh * 0.42)))}px "IBM Plex Mono", monospace`;
+    const fontPx = Math.max(7, Math.min(10, Math.round(bh * 0.34)));
+    p.font = `bold ${fontPx}px "IBM Plex Mono", monospace`;
     p.textAlign = "center"; p.textBaseline = "middle";
 
-    // ── ink lines between rooms (this floor) + "?" stubs + stair marks ──
-    const drawn = new Set<string>();
-    const hline = (x1: number, x2: number, y: number, c: string) => { p.fillStyle = c; p.fillRect(Math.round(Math.min(x1, x2)), Math.round(y) - 1, Math.round(Math.abs(x2 - x1)) + 2, 2); };
-    const vline = (y1: number, y2: number, x: number, c: string) => { p.fillStyle = c; p.fillRect(Math.round(x) - 1, Math.round(Math.min(y1, y2)), 2, Math.round(Math.abs(y2 - y1)) + 2); };
-    const elbow = (x1: number, y1: number, x2: number, y2: number, c: string) => { if (Math.abs(y1 - y2) < 2) hline(x1, x2, y1, c); else if (Math.abs(x1 - x2) < 2) vline(y1, y2, x1, c); else { hline(x1, x2, y1, c); vline(y1, y2, x2, c); } };
+    // ── ink lines between rooms, Trizbort-style: straight, from box EDGE to
+    // box EDGE on the true compass side. Neighbours get firm ink; a passage
+    // that wraps a long way is thin and dashed so it can't dominate the page.
+    const anchorPt = (node: MapNode, d: [number, number]): [number, number] => {
+      const [x, y] = this.proj(node);
+      return [x + Math.sign(d[0]) * (bw / 2 + 1), y + Math.sign(d[1]) * (bh / 2 + 1)];
+    };
+    const line = (x1: number, y1: number, x2: number, y2: number, c: string, wpx: number, dash?: number[]) => {
+      p.strokeStyle = c; p.lineWidth = wpx; p.setLineDash(dash ?? []);
+      p.beginPath(); p.moveTo(x1 + 0.5, y1 + 0.5); p.lineTo(x2 + 0.5, y2 + 0.5); p.stroke();
+      p.setLineDash([]);
+    };
     const tri = (x: number, y: number, up: boolean, c: string) => { p.fillStyle = c; for (let r = 0; r < 3; r++) { const w = up ? r : 2 - r; p.fillRect(Math.round(x - w), Math.round(y + (up ? r - 1 : -r + 1)), w * 2 + 1, 1); } };
 
+    const drawn = new Set<string>();
     for (const n of ns) {
       const room = this.rooms[n.id]; if (!room) continue;
-      const [x1, y1] = this.proj(n);
-      let stairUp = 0, stairDown = 0, qs = 0; // per-room marks
+      let stairUp = 0, stairDown = 0;
       for (const [dir, e] of Object.entries(room.exits)) {
         if (!e.to) continue;
         const vert = dir === "UP" || dir === "DOWN";
@@ -257,18 +273,28 @@ export class GameMap {
         const d = DELTA[dir]; if (!d) continue;
         if (target && target.z === n.z) {
           const key = [n.id, e.to].sort().join("|"); if (drawn.has(key)) continue; drawn.add(key);
-          const [x2, y2] = this.proj(target);
-          elbow(x1, y1, x2, y2, INK);
-        } else if (!target) { // an exit not yet taken → short stub + "?"
-          const sx = x1 + d[0] * (bw / 2 + 7), sy = y1 + d[1] * (bh / 2 + 7);
-          elbow(x1, y1, x1 + d[0] * (bw / 2 + 4), y1 + d[1] * (bh / 2 + 4), INK_DIM);
-          p.fillStyle = pulse ? GOLD : GOLD_DIM;
-          p.fillText("?", Math.round(sx + d[0] * 3), Math.round(sy + d[1] * 3) + 1);
-          qs++;
+          const [ax, ay] = anchorPt(n, d);
+          // enter the far box on ITS reciprocal side when the way back exists
+          const backRoom = this.rooms[e.to];
+          const backDir = backRoom ? Object.entries(backRoom.exits).find(([bd2, ex]) => ex.to === n.id && DELTA[bd2])?.[0] : undefined;
+          const rd: [number, number] = backDir ? DELTA[backDir] as [number, number] : [-d[0], -d[1]];
+          const [tx2, ty2] = anchorPt(target, rd);
+          const near = Math.abs(target.x - n.x) <= 1 && Math.abs(target.y - n.y) <= 1;
+          line(ax, ay, tx2, ty2, near ? INK : INK_DIM, near ? 2 : 1, near ? undefined : [4, 4]);
+          if (backRoom && !backDir && !Object.values(backRoom.exits).some((ex) => ex.to === n.id)) {
+            // one-way passage → an arrowhead midway (Infocom hand-map convention)
+            const mx = (ax + tx2) / 2, my2 = (ay + ty2) / 2, ang = Math.atan2(ty2 - ay, tx2 - ax);
+            p.save(); p.translate(mx, my2); p.rotate(ang); p.fillStyle = near ? INK : INK_DIM;
+            p.beginPath(); p.moveTo(4, 0); p.lineTo(-3, -3.5); p.lineTo(-3, 3.5); p.closePath(); p.fill(); p.restore();
+          }
+        } else if (!target) { // an exit not yet taken: a dashed line trailing off into the dark
+          const [ax, ay] = anchorPt(n, d);
+          const len = Math.hypot(d[0], d[1]);
+          const ux = d[0] / len, uy = d[1] / len;
+          const fade = [INK, INK_DIM, "#0d3018"];
+          for (let s2 = 0; s2 < 3; s2++) line(ax + ux * (2 + s2 * 6), ay + uy * (2 + s2 * 6), ax + ux * (5 + s2 * 6), ay + uy * (5 + s2 * 6), fade[s2], 2);
         }
-        // exits to a room on another floor via a ramp (rare): leave to stairs marks
       }
-      void qs; void stairUp; void stairDown;
       (n as MapNode & { _st?: [number, number] })._st = [stairUp, stairDown];
     }
 
@@ -278,35 +304,30 @@ export class GameMap {
       const bx = Math.round(x - bw / 2), by = Math.round(y - bh / 2);
       const isHere = n.id === this.current, isSel = n.id === this.selected;
       p.fillStyle = "#02120a"; p.fillRect(bx - 2, by - 2, bw + 4, bh + 4); // paper shows through around the box
-      p.fillStyle = isHere ? "#0a3a1e" : BOX_FILL; p.fillRect(bx, by, bw, bh);
-      const edge = isHere ? HERE : isSel ? GOLD : bw >= 24 ? BOX_EDGE : BOX_EDGE_DIM;
-      p.fillStyle = edge;
-      p.fillRect(bx, by, bw, 2); p.fillRect(bx, by + bh - 2, bw, 2); p.fillRect(bx, by, 2, bh); p.fillRect(bx + bw - 2, by, 2, bh);
-      // label: the room's name pencilled BENEATH the box (hand-map style).
-      // Every room gets one when zoomed in; you/selection always do.
-      if (showLabels || isHere || isSel) {
-        const lines = abbrev(n.name, 11);
-        const col = isHere ? HERE : isSel ? GOLD : LABEL_DIM;
-        let ly = by + bh + 6;
-        for (const ln of lines) {
-          const tw = p.measureText(ln).width;
-          p.fillStyle = "#02120a"; p.fillRect(Math.round(x - tw / 2) - 2, ly - 4, Math.round(tw) + 4, 9); // backing so ink lines don't cut the words
-          p.fillStyle = col; p.fillText(ln, x, ly);
-          ly += 9;
-        }
+      if (isHere) { // crawler-style highlight: YOUR room is the inverted, glowing cell
+        p.fillStyle = pulse ? "#2f8a4a" : "#256e3b"; p.fillRect(bx - 3, by - 3, bw + 6, bh + 6); // soft phosphor bleed
+        p.fillStyle = pulse ? "#8affb0" : "#6fe89a"; p.fillRect(bx, by, bw, bh);
+        p.fillStyle = "#eafff0";
+        p.fillRect(bx, by, bw, 2); p.fillRect(bx, by + bh - 2, bw, 2); p.fillRect(bx, by, 2, bh); p.fillRect(bx + bw - 2, by, 2, bh);
+      } else {
+        p.fillStyle = BOX_FILL; p.fillRect(bx, by, bw, bh);
+        const edge = isSel ? GOLD : bw >= 24 ? BOX_EDGE : BOX_EDGE_DIM;
+        p.fillStyle = edge;
+        p.fillRect(bx, by, bw, 2); p.fillRect(bx, by + bh - 2, bw, 2); p.fillRect(bx, by, 2, bh); p.fillRect(bx + bw - 2, by, 2, bh);
       }
+      // label: the room's name INSIDE the box, Trizbort-style — always readable
+      const chars = Math.max(5, Math.floor((bw - 8) / (fontPx * 0.62)));
+      const lines = abbrev(n.name, chars).slice(0, 2);
+      const col = isHere ? "#03180c" : isSel ? GOLD : LABEL;
+      p.fillStyle = col;
+      if (lines.length === 1) p.fillText(lines[0], x, y + 1);
+      else { p.fillText(lines[0], x, y - Math.round(fontPx * 0.55)); p.fillText(lines[1], x, y + Math.round(fontPx * 0.62)); }
       // stair marks at the west edge; item pip at the east
       const st = (n as MapNode & { _st?: [number, number] })._st || [0, 0];
-      if (st[0]) tri(bx + 5, by + 5, true, st[0] === 2 ? (pulse ? GOLD : GOLD_DIM) : LABEL_DIM);
-      if (st[1]) tri(bx + 5, by + bh - 5, false, st[1] === 2 ? (pulse ? GOLD : GOLD_DIM) : LABEL_DIM);
-      if (n.items.length) { p.fillStyle = GOLD; p.fillRect(bx + bw - 7, by + 3, 3, 3); p.fillStyle = "#fff0b0"; p.fillRect(bx + bw - 7, by + 3, 1, 1); }
-      // the @: you are here
-      if (isHere) {
-        p.fillStyle = pulse ? "#eafff0" : "#8affb0";
-        p.font = `bold ${Math.max(10, Math.round(bh * 0.62))}px "IBM Plex Mono", monospace`;
-        p.fillText("@", x, y + 1);
-        p.font = `bold ${Math.max(8, Math.min(10, Math.round(bh * 0.42)))}px "IBM Plex Mono", monospace`;
-      }
+      const stCol = (v: number) => (isHere ? "#04140a" : v === 2 ? (pulse ? GOLD : GOLD_DIM) : LABEL_DIM);
+      if (st[0]) tri(bx + 5, by + 5, true, stCol(st[0]));
+      if (st[1]) tri(bx + 5, by + bh - 5, false, stCol(st[1]));
+      if (n.items.length) { p.fillStyle = isHere ? "#7a5f16" : GOLD; p.fillRect(bx + bw - 7, by + 3, 3, 3); if (!isHere) { p.fillStyle = "#fff0b0"; p.fillRect(bx + bw - 7, by + 3, 1, 1); } }
     }
 
     // ── info panel ──
@@ -317,11 +338,11 @@ export class GameMap {
     const untried = room ? exitDirs.filter((d) => { const to = room.exits[d].to!; return !this.nodes.has(to); }) : [];
     const items = sel.items.length ? sel.items.map((i) => `<li>${esc(i)}</li>`).join("") : `<li class="map-dim">— nothing notable —</li>`;
     this.info.innerHTML = `
-      <div class="map-here">${sel.id === this.current ? "@ " : ""}${esc(sel.name)}</div>
+      <div class="map-here">${sel.id === this.current ? "► " : ""}${esc(sel.name)}</div>
       <div class="map-sub">FOUND HERE</div>
       <ul class="map-items">${items}</ul>
       <div class="map-sub">EXITS</div>
-      <div class="map-exits">${exitDirs.length ? exitDirs.map((d) => untried.includes(d) ? `<b class="map-untried">${d.toLowerCase()}?</b>` : d.toLowerCase()).join(" · ") : "—"}</div>`;
+      <div class="map-exits">${exitDirs.length ? exitDirs.map((d) => untried.includes(d) ? `<b class="map-untried">${d.toLowerCase()}…</b>` : d.toLowerCase()).join(" · ") : "—"}</div>`;
   }
 
   private save() { try { localStorage.setItem(this.saveKey, JSON.stringify({ current: this.current, nodes: [...this.nodes.values()].map((n) => ({ id: n.id, name: n.name, items: n.items })) })); } catch { /* quota */ } }

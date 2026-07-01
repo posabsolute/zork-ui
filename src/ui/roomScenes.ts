@@ -400,7 +400,7 @@ function pixelStage(ctx: CanvasRenderingContext2D, w: number, h: number, pw: num
   ctx.drawImage(_pbuf, 0, 0, pw, ph, 0, 0, w, h);
 }
 
-interface HouseOpts { door?: boolean; ajar?: boolean; face?: "front" | "back" | "end" }
+interface HouseOpts { door?: boolean; ajar?: boolean; face?: "front" | "back" | "end"; moonF?: number }
 // The white house — an authentic Georgian/Federal COLONIAL, built around the real
 // signatures (see refs): strict 5-BAY SYMMETRY, a steeply-pitched SIDE-GABLE roof
 // punctuated by DORMERS, PAIRED chimneys at the gable ends, and a centred entrance
@@ -420,19 +420,25 @@ function housePixel(p: CanvasRenderingContext2D, pw: number, ph: number, horizon
   const rBase = "#4a4759", rDark = "#383546", rLit = "#635f77", rEave = "#1b1a24";
   const shutter = "#2a2f39", glass = "#10141c", muntin = "#333b46", stone = "#6b6960";
   const doorW = "#3a2c1d", doorL = "#5a4630", board = "#3f3120";
-  // soft ground shadow
-  p.fillStyle = "rgba(0,0,0,0.26)"; p.beginPath(); p.ellipse(cx, baseY + 1, hw * 0.56, 3, 0, 0, Math.PI * 2); p.fill();
+  // ground shadow: a dithered dark pool hugging the footing (no smooth ellipse)
+  for (let y = baseY - 1; y < baseY + 5; y++) for (let x = x0 - 8; x < x1 + 8; x++) {
+    const ex = (x - cx) / (hw * 0.62), ey = (y - baseY - 1) / 3.2, dd = ex * ex + ey * ey;
+    if (dd < 1 && (1 - dd) * 0.85 > dth(x, y)) { p.fillStyle = "#050806"; p.fillRect(x, y, 1, 1); }
+  }
   // ---- a small reusable 4-pane shuttered window ----
   const ww = Math.max(5, Math.round(hw * (broad ? 0.075 : 0.13))), wh = Math.round(ww * 1.5);
   const win = (wcx: number, wy: number, mode: "boarded" | "ajar" | "open") => {
     const wx = Math.round(wcx - ww / 2);
+    p.fillStyle = "#565c66"; p.fillRect(wx - 4, wy - 1, 1, wh + 2); // reveal shadow the shutters cast on the clapboard
     p.fillStyle = shutter; p.fillRect(wx - 3, wy, 2, wh); p.fillRect(wx + ww + 1, wy, 2, wh);
     for (let s = wy; s < wy + wh; s += 2) { p.fillStyle = "#1d222b"; p.fillRect(wx - 3, s, 2, 1); p.fillRect(wx + ww + 1, s, 2, 1); } // louvre lines
     p.fillStyle = trim; p.fillRect(wx - 1, wy - 1, ww + 2, wh + 2); p.fillStyle = glass; p.fillRect(wx, wy, ww, wh);
+    p.fillStyle = "#0a0d13"; p.fillRect(wx, wy, ww, 1); // the lintel's shadow inside the reveal
     p.fillStyle = "#39465e"; p.fillRect(wx + 1, wy + 1, 2, 1); // the moon caught in the dark glass (a reflection, not a light)
     p.fillStyle = muntin; p.fillRect(wx + (ww >> 1), wy, 1, wh); p.fillRect(wx, wy + Math.round(wh / 2), ww, 1);
     p.fillStyle = trim; p.fillRect(wx - 2, wy + wh + 1, ww + 4, 1); // sill
-    if (mode === "boarded") { p.fillStyle = board; for (let k = 0; k < 2; k++) p.fillRect(wx - 1, wy + 2 + k * Math.round(wh * 0.5), ww + 2, 2); }
+    p.fillStyle = "#6a707a"; p.fillRect(wx - 2, wy + wh + 2, ww + 4, 1); // the sill's cast shadow
+    if (mode === "boarded") { p.fillStyle = board; for (let k = 0; k < 2; k++) p.fillRect(wx - 1, wy + 2 + k * Math.round(wh * 0.5), ww + 2, 2); p.fillStyle = "#584832"; for (let k = 0; k < 2; k++) p.fillRect(wx - 1, wy + 2 + k * Math.round(wh * 0.5), ww + 2, 1); } // nailed planks, moon-caught top edge
     else if (mode === "ajar") { p.fillStyle = "#05070a"; p.fillRect(wx + 1, wy, ww - 2, 3); p.fillStyle = "#8aa0bd"; p.fillRect(wx, wy - 1, ww, 1); }
     else { p.fillStyle = "#05070a"; p.fillRect(wx, wy, ww, Math.round(wh * 0.6)); p.fillStyle = "#8aa0bd"; p.fillRect(wx, wy - Math.round(wh * 0.35), ww, 2); }
   };
@@ -444,21 +450,33 @@ function housePixel(p: CanvasRenderingContext2D, pw: number, ph: number, horizon
     p.fillStyle = "#4a4658"; p.fillRect(cxC - 1, topY, chW + 2, 2); p.fillStyle = "#5a566c"; p.fillRect(cxC - 1, topY, chW + 2, 1); // corbelled cap
     p.fillStyle = "#15131c"; p.fillRect(cxC + 1, topY - 1, chW - 2, 1); // the cold flue mouth
   };
+  const moonX = pw * (opts.moonF ?? 0.26), litLeft = moonX < cx; // which corner faces the moon
+  // dithered flank shading: the wall turns away from the moonlight
+  const flankShade = (x: number, yy: number) => {
+    const f = litLeft ? (x - x0) / hw : (x1 - x) / hw; // 0 at lit corner → 1 at shadow corner
+    return f > 0.55 && (f - 0.55) * 2.4 > dth(x, wallTop + yy);
+  };
   if (broad) {
     // ---- body ----
-    for (let yy = 0; yy < wallH; yy++) { p.fillStyle = (yy % 3 === 2) ? wMid : wLit; p.fillRect(x0, wallTop + yy, hw, 1); }
-    p.fillStyle = wDk; p.fillRect(x0, wallTop, hw, 2); p.fillRect(x0, baseY - 3, hw, 3);
-    p.fillStyle = trim; p.fillRect(x0, wallTop, 2, wallH); p.fillRect(x1 - 2, wallTop, 2, wallH);
-    const midY = wallTop + Math.round(wallH * 0.5); p.fillStyle = trim; p.fillRect(x0, midY, hw, 1);
+    for (let yy = 0; yy < wallH; yy++) for (let x = x0; x < x1; x++) {
+      const base = (yy % 3 === 2) ? wMid : wLit;
+      p.fillStyle = yy < 2 ? wDk : yy < 4 && (yy + x) % 2 ? wDk : flankShade(x, yy) ? ((yy % 3 === 2) ? wDk : wMid) : base; // eave shadow melts down; flank falls into half-light
+      p.fillRect(x, wallTop + yy, 1, 1);
+    }
+    p.fillStyle = wDk; p.fillRect(x0, baseY - 3, hw, 3);
+    p.fillStyle = trim; p.fillRect(x0, wallTop, 2, wallH); p.fillStyle = litLeft ? "#b2b8c0" : trim; p.fillRect(x1 - 2, wallTop, 2, wallH); if (!litLeft) { p.fillStyle = "#b2b8c0"; p.fillRect(x0, wallTop, 2, wallH); } // corner boards: lit one bright, far one dimmed
+    const midY = wallTop + Math.round(wallH * 0.5); p.fillStyle = trim; p.fillRect(x0, midY, hw, 1); p.fillStyle = "#8e949e"; p.fillRect(x0, midY + 1, hw, 1); // storey band + its shadow line
     p.fillStyle = "#46443e"; p.fillRect(x0 - 1, baseY - 2, hw + 2, 3);
+    p.fillStyle = "#31302c"; p.fillRect(x0 - 1, baseY, hw + 2, 1); // footing sinking into shadow
     // ---- steep SIDE-GABLE roof (long ridge, modest eaves) ----
     const roofH = Math.round(wallH * 0.5), ov = Math.max(2, Math.round(hw * 0.04)), ridgeHalf = Math.round(hw * 0.43), eaveHalf = Math.round(hw / 2) + ov;
     for (let i = 0; i < roofH; i++) { const f = i / (roofH - 1), half = Math.round(eaveHalf * (1 - f) + ridgeHalf * f); p.fillStyle = (i % 3 === 0) ? rDark : rBase; p.fillRect(cx - half, wallTop - 1 - i, half * 2 + 1, 1); }
     p.fillStyle = rDark; // staggered slate ticks so the slopes read as shingles
     for (let i = 1; i < roofH; i++) { if (i % 3 === 0) continue; const f = i / (roofH - 1), half = Math.round(eaveHalf * (1 - f) + ridgeHalf * f); for (let x = cx - half + 2 + ((i % 2) * 3); x < cx + half - 2; x += 6) if (hash(x, i) > 0.4) p.fillRect(x, wallTop - 1 - i, 1, 1); }
     p.fillStyle = rLit; p.fillRect(cx - ridgeHalf, wallTop - roofH, ridgeHalf * 2 + 1, 1);
+    p.fillStyle = "#7a7590"; for (let i = 1; i < roofH; i++) { const f = i / (roofH - 1), half = Math.round(eaveHalf * (1 - f) + ridgeHalf * f); p.fillRect(litLeft ? cx - half : cx + half, wallTop - 1 - i, 1, 1); } // moon skimming the raking edge
     p.fillStyle = rEave; p.fillRect(cx - eaveHalf, wallTop - 1, eaveHalf * 2 + 1, 1);
-    p.fillStyle = trim; for (let x = x0 + 2; x < x1 - 1; x += 3) p.fillRect(x, wallTop - 2, 1, 1); // dentil cornice
+    p.fillStyle = "#9aa0aa"; for (let x = x0 + 2; x < x1 - 1; x += 4) p.fillRect(x, wallTop - 2, 1, 1); // dentil cornice, quiet in the gloom
     // paired chimneys near the ridge ends
     chimney(cx - Math.round(ridgeHalf * 0.82) - Math.round(chW / 2), wallTop - roofH - 7, roofH + 9);
     chimney(cx + Math.round(ridgeHalf * 0.82) - Math.round(chW / 2), wallTop - roofH - 7, roofH + 9);
@@ -480,6 +498,8 @@ function housePixel(p: CanvasRenderingContext2D, pw: number, ph: number, horizon
       // ---- the centred entrance: pilasters, pediment, fanlight, boarded door ----
       const dw = Math.max(8, Math.round(hw * 0.1)), dh = Math.round(wallH * 0.48), dx = cx - Math.round(dw / 2), dy = baseY - dh;
       p.fillStyle = stone; p.fillRect(dx - 3, baseY - 1, dw + 6, 2); p.fillStyle = "#54524a"; p.fillRect(dx - 1, baseY - 3, dw + 2, 2); // stone steps
+      p.fillStyle = "#1d211c"; p.fillRect(dx - 4, baseY + 1, dw + 8, 1); // the steps' shadow on the grass
+      p.fillStyle = "#262a32"; p.fillRect(dx - 2, dy - 1, 2, dh - 2); p.fillRect(dx + dw, dy - 1, 2, dh - 2); // the entry recess, sunk in shadow
       p.fillStyle = doorW; p.fillRect(dx, dy, dw, dh); p.fillStyle = doorL; for (let k = 0; k < 3; k++) p.fillRect(dx, dy + 4 + k * Math.round(dh * 0.26), dw, 2); p.fillStyle = "#241a10"; p.fillRect(cx, dy, 1, dh); // boarded door
       p.fillStyle = trim; p.fillRect(dx - 3, dy - 2, 1, dh + 2); p.fillRect(dx + dw + 2, dy - 2, 1, dh + 2); // pilasters
       const fr = Math.round(dw * 0.5) + 1, fcy = dy - 2;
@@ -497,12 +517,18 @@ function housePixel(p: CanvasRenderingContext2D, pw: number, ph: number, horizon
   } else {
     // ---- gable END: the steep triangular gable wall ----
     const peakH = Math.round(wallH * 0.72), ov = Math.round(hw * 0.06);
-    for (let yy = 0; yy < wallH; yy++) { p.fillStyle = (yy % 3 === 2) ? wMid : wLit; p.fillRect(x0, wallTop + yy, hw, 1); }
+    for (let yy = 0; yy < wallH; yy++) for (let x = x0; x < x1; x++) {
+      const base = (yy % 3 === 2) ? wMid : wLit;
+      p.fillStyle = flankShade(x, yy) ? ((yy % 3 === 2) ? wDk : wMid) : base;
+      p.fillRect(x, wallTop + yy, 1, 1);
+    }
     p.fillStyle = wDk; p.fillRect(x0, baseY - 3, hw, 3);
-    for (let i = 0; i <= peakH; i++) { const f = 1 - i / peakH, half = Math.round((hw / 2) * f); if (half > 0) { p.fillStyle = (i % 3 === 2) ? wMid : wLit; p.fillRect(cx - half, wallTop - i, half * 2, 1); } } // clapboard triangle
-    for (let i = 0; i <= peakH; i++) { const f = 1 - i / peakH, half = Math.round((hw / 2) * Math.max(0, f)); p.fillStyle = rBase; p.fillRect(cx - half - ov, wallTop - i, 3, 1); p.fillRect(cx + half + ov - 2, wallTop - i, 3, 1); } // raking roof edges
+    for (let i = 0; i <= peakH; i++) { const f = 1 - i / peakH, half = Math.round((hw / 2) * f); if (half > 0) for (let x = cx - half; x < cx + half; x++) { p.fillStyle = flankShade(x, 0) ? ((i % 3 === 2) ? wDk : wMid) : (i % 3 === 2) ? wMid : wLit; p.fillRect(x, wallTop - i, 1, 1); } } // clapboard triangle, shadow flank included
+    for (let i = 0; i <= peakH; i++) { const f = 1 - i / peakH, half = Math.round((hw / 2) * Math.max(0, f)); p.fillStyle = rBase; p.fillRect(cx - half - ov, wallTop - i, 3, 1); p.fillRect(cx + half + ov - 2, wallTop - i, 3, 1); p.fillStyle = "#7a7590"; p.fillRect(litLeft ? cx - half - ov : cx + half + ov, wallTop - i, 1, 1); } // raking roof edges, moon skimming the lit rake
     p.fillStyle = trim; p.fillRect(x0, wallTop, 2, wallH); p.fillRect(x1 - 2, wallTop, 2, wallH); // corner boards
+    p.fillStyle = litLeft ? "#b2b8c0" : trim; p.fillRect(x1 - 2, wallTop, 2, wallH); if (!litLeft) { p.fillStyle = "#b2b8c0"; p.fillRect(x0, wallTop, 2, wallH); } // dim the shadow-side corner board
     p.fillStyle = "#46443e"; p.fillRect(x0 - 1, baseY - 2, hw + 2, 3);
+    p.fillStyle = "#31302c"; p.fillRect(x0 - 1, baseY, hw + 2, 1); // footing sinking into shadow
     chimney(cx - Math.round(chW / 2), wallTop - peakH - 6, Math.round(peakH * 0.55) + 8); // chimney at the ridge (the near end-chimney)
     const ay = wallTop - Math.round(peakH * 0.46); p.fillStyle = trim; p.fillRect(cx - 4, ay - 1, 8, 7); p.fillStyle = glass; p.fillRect(cx - 3, ay, 6, 5); p.fillStyle = muntin; p.fillRect(cx, ay, 1, 5); p.fillStyle = board; p.fillRect(cx - 3, ay + 1, 6, 1); p.fillRect(cx - 3, ay + 3, 6, 1); // boarded attic window in the gable
     const midY = wallTop + Math.round(wallH * 0.5); p.fillStyle = trim; p.fillRect(x0, midY, hw, 1);
@@ -524,17 +550,31 @@ function mailboxPixel(p: CanvasRenderingContext2D, x: number, y: number) {
   p.fillStyle = "#b03a2a"; p.fillRect(x + 5, y - 14, 1, 3); // flag
 }
 function fgTreePixel(p: CanvasRenderingContext2D, pw: number, ph: number, t: number) {
-  p.fillStyle = "#04060a";
+  const ink = "#04060a";
   const tx = Math.round(pw * 0.07), sway = Math.sin(t * 0.7);
+  const leanAt = (y: number) => Math.round((1 - y / ph) * -5 + Math.sin(y * 0.1) * 1 + sway * (1 - y / ph) * 1.6);
+  p.fillStyle = ink;
   for (let y = 0; y < ph; y++) {
-    const lean = Math.round((y / ph) * -4 + Math.sin(y * 0.12) * 1 + sway * (y / ph) * 1.5);
-    p.fillRect(tx + lean, y, 3 - Math.round(y / ph), 1); // tapering leaning trunk
+    const f = y / ph, wd = 1 + Math.round(f * 3); // thick at the root, thin aloft
+    p.fillRect(tx + leanAt(y), y, wd, 1);
   }
-  for (let b = 0; b < 3; b++) {
-    const by = Math.round(ph * (0.22 + b * 0.22));
-    const bl = Math.round((by / ph) * -4);
-    for (let k = 0; k < 16; k++) p.fillRect(tx + 2 + bl + k, by - Math.round(k * 0.7) + Math.round(sway * (k / 8)), 2, 2);
-  }
+  p.fillStyle = "#1a2130"; for (let y = 8; y < ph; y += 3) if (hash(2, y) > 0.55) p.fillRect(tx + leanAt(y) + 1 + Math.round((y / ph) * 3), y, 1, 1); // moonlight down one edge of the bark
+  // boughs that fork and taper to 1px twigs (not stubs)
+  const bough = (by: number, dirx: number, len: number, seed: number) => {
+    p.fillStyle = ink;
+    let xx = tx + leanAt(by), yy = by;
+    for (let k = 0; k < len; k++) {
+      xx += dirx; if (hash(seed, k) > 0.42) yy -= 1;
+      p.fillRect(xx, yy, k < len * 0.45 ? 2 : 1, 1);
+      if (k === Math.round(len * 0.5)) { let ax = xx, ay = yy; for (let j = 0; j < 7; j++) { ax += dirx; if (j % 2) ay -= 1; p.fillRect(ax, ay, 1, 1); } } // upward twig
+      if (k === Math.round(len * 0.75)) { let ax = xx, ay = yy; for (let j = 0; j < 5; j++) { ax += dirx; if (j % 2 === 0) ay += 1; p.fillRect(ax, ay, 1, 1); } } // drooping twig
+    }
+    for (let j = 0; j < 5; j++) { xx += dirx; if (j % 2) yy -= 1; p.fillRect(xx, yy, 1, 1); } // it thins away to nothing
+  };
+  bough(Math.round(ph * 0.14), 1, 15, 3);
+  bough(Math.round(ph * 0.27), 1, 20, 4);
+  bough(Math.round(ph * 0.22), -1, 8, 6);
+  bough(Math.round(ph * 0.44), 1, 13, 5);
 }
 // The shared night backdrop for the above-ground house scenes: dithered sky +
 // moon-glow pool, twinkling stars, the pixel moon, a distant treeline, dithered
@@ -543,14 +583,16 @@ function pixelBackdrop(p: CanvasRenderingContext2D, pw: number, ph: number, t: n
   const horizon = Math.round(ph * 0.6);
   const img = p.createImageData(pw, ph);
   const d = img.data;
-  const skyTop = [6, 8, 20], skyHz = [26, 34, 62], glow = [150, 165, 222];
+  const SKYB: number[][] = [[5, 7, 18], [11, 15, 32], [18, 25, 48], [26, 34, 62]]; // committed night bands, dither only at the seams
+  const glow = [150, 165, 222];
   const grndTop = [22, 30, 20], grndBot = [7, 11, 9];
   const mx = Math.round(pw * moonF), my = Math.round(ph * 0.22), mr = Math.max(3, Math.round(pw * 0.032));
   for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
     let c: number[];
     const th = dth(x, y);
     if (y < horizon) {
-      c = mix(skyTop, skyHz, y / horizon);
+      const f = (y / horizon) * (SKYB.length - 1), b = Math.floor(f);
+      c = SKYB[Math.min(SKYB.length - 1, b + ((f - b) * 1.8 - 0.4 > th ? 1 : 0))];
       const dx = x - mx, dy = y - my, dist = Math.sqrt(dx * dx + dy * dy);
       const gl = Math.max(0, 1 - dist / (mr * 8));
       if (gl > 0) c = mix(c, glow, gl * gl * 0.85);
@@ -563,6 +605,8 @@ function pixelBackdrop(p: CanvasRenderingContext2D, pw: number, ph: number, t: n
       const dxm = (x - mx) / (pw * 0.3), dym = (y - (horizon + 8)) / ((ph - horizon) * 0.9);
       const pool = Math.max(0, 1 - Math.sqrt(dxm * dxm + dym * dym));
       if (pool > 0 && n > 0.35) c = mix(c, [64, 78, 92], pool * pool * 0.5);
+      const fg = (y - ph * 0.82) / (ph * 0.18); // the near lawn falls out of the light
+      if (fg > 0) c = mix(c, [3, 5, 4], Math.min(0.7, fg * 0.8));
     }
     sp(d, pw, x, y, qcol(c, th));
   }
@@ -575,12 +619,13 @@ function pixelBackdrop(p: CanvasRenderingContext2D, pw: number, ph: number, t: n
   p.fillStyle = "#e8eaf2"; fillDisc(p, mx, my, mr);
   p.fillStyle = "#c2c6d6"; p.fillRect(mx + 1, my - 1, 2, 2); p.fillRect(mx - 2, my + 1, 1, 1);
   // distant hazy ridge — cooler, lower-contrast, taller; reads as far hills BEHIND
-  // the near treeline (atmospheric perspective via value layering)
+  // the near treeline. Irregular crests (hash-broken), not repeated sine humps.
   p.fillStyle = "#141d33";
-  for (let x = 0; x < pw; x++) { const ty = horizon - (5 + Math.floor((Math.sin(x * 0.045 + 1.3) + Math.sin(x * 0.02) + 2) * 3)); p.fillRect(x, ty, 1, horizon - ty + 1); }
-  // near treeline — near-black, shorter, higher-contrast (closer)
+  for (let x = 0; x < pw; x++) { const ty = horizon - (5 + Math.floor((Math.sin(x * 0.03 + 1.3) + Math.sin(x * 0.011) + 2) * 3.5 + (hash(x >> 4, 3) - 0.5) * 7)); p.fillRect(x, ty, 1, horizon - ty + 1); }
+  // near treeline — near-black, ragged clumps of crowns (closer, higher contrast)
   p.fillStyle = "#08120e";
-  for (let x = 0; x < pw; x++) { const ty = horizon - (2 + Math.floor(Math.abs(Math.sin(x * 0.18) + Math.sin(x * 0.071)) * 6)); p.fillRect(x, ty, 1, horizon - ty + 1); }
+  for (let x = 0; x < pw; x++) { const clump = hash(x >> 3, 5), ty = horizon - (2 + Math.floor(Math.abs(Math.sin(x * 0.14 + clump * 4)) * (3 + clump * 7) + hash(x, 6) * 2)); p.fillRect(x, ty, 1, horizon - ty + 1); }
+  p.fillStyle = "#122032"; for (let x = 0; x < pw; x += 2) if (hash(x >> 1, 8) > 0.72) p.fillRect(x, horizon - 1, 1, 1); // moonlight snagging a few crowns
   return horizon;
 }
 function rainPixel(p: CanvasRenderingContext2D, pw: number, ph: number, t: number, n = 70) {
@@ -620,7 +665,7 @@ function pixelPath(p: CanvasRenderingContext2D, pw: number, ph: number, horizon:
 function westOfHousePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const horizon = pixelBackdrop(p, pw, ph, t);
-    housePixel(p, pw, ph, horizon, t, 0.56, { door: true, face: "front" }); // colonial front: portico + boarded door, moonlit only
+    housePixel(p, pw, ph, horizon, t, 0.56, { door: true, face: "front", moonF: 0.26 }); // colonial front: portico + boarded door, moonlit only
     mailboxPixel(p, Math.round(pw * 0.22), horizon + Math.round((ph - horizon) * 0.34));
     fgTreePixel(p, pw, ph, t);
     rainPixel(p, pw, ph, t);
@@ -630,7 +675,7 @@ function northOfHousePixel(ctx: CanvasRenderingContext2D, w: number, h: number, 
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const horizon = pixelBackdrop(p, pw, ph, t, 0.74);
     pixelPath(p, pw, ph, horizon, "north"); // a path winds north into the forest
-    housePixel(p, pw, ph, horizon, t, 0.64, { face: "end" }); // north gable end: no door, boarded
+    housePixel(p, pw, ph, horizon, t, 0.64, { face: "end", moonF: 0.74 }); // north gable end: no door, boarded
     fgTreePixel(p, pw, ph, t);
     rainPixel(p, pw, ph, t);
   });
@@ -638,7 +683,7 @@ function northOfHousePixel(ctx: CanvasRenderingContext2D, w: number, h: number, 
 function southOfHousePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const horizon = pixelBackdrop(p, pw, ph, t, 0.2);
-    housePixel(p, pw, ph, horizon, t, 0.5, { face: "end" }); // south gable end: no door, boarded
+    housePixel(p, pw, ph, horizon, t, 0.5, { face: "end", moonF: 0.2 }); // south gable end: no door, boarded
     fgTreePixel(p, pw, ph, t);
     rainPixel(p, pw, ph, t);
   });
@@ -647,7 +692,7 @@ function behindHousePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const horizon = pixelBackdrop(p, pw, ph, t, 0.22);
     pixelPath(p, pw, ph, horizon, "east"); // a path leads east into the forest
-    housePixel(p, pw, ph, horizon, t, 0.38, { ajar: true, face: "back" }); // back façade: the small corner window, slightly ajar
+    housePixel(p, pw, ph, horizon, t, 0.38, { ajar: true, face: "back", moonF: 0.22 }); // back façade: the small corner window, slightly ajar
     fgTreePixel(p, pw, ph, t);
     rainPixel(p, pw, ph, t);
   });
@@ -1533,9 +1578,22 @@ function southTemplePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t
     const lay = builtRoom(p, pw, ph, t, "temple", 0.5, [230, 200, 140]); const floorY = lay.by1; exitsBox(p, pw, ph, lay, ["NORTH"]);
     p.fillStyle = "#6a604a"; for (const fx of [0.15, 0.85]) { const x = Math.round(pw * fx); p.fillRect(x - 5, Math.round(ph * 0.08), 10, floorY + Math.round((ph - floorY) * 0.5) - Math.round(ph * 0.08)); p.fillStyle = "#544a38"; for (let y = Math.round(ph * 0.08); y < floorY; y += 4) p.fillRect(x - 5, y, 10, 1); p.fillStyle = "#7a7058"; p.fillRect(x - 7, Math.round(ph * 0.08), 14, 3); p.fillStyle = "#6a604a"; } // temple columns
     const ax = Math.round(pw * 0.5), ay = floorY + Math.round((ph - floorY) * 0.4);
-    p.fillStyle = "#8a8068"; p.fillRect(ax - 16, ay, 32, 12); p.fillStyle = "#a89a78"; p.fillRect(ax - 16, ay, 32, 2); // the altar
-    for (const dx of [-11, 11]) { const fl = Math.sin(t * 8 + dx) > 0 ? 1 : 0; p.fillStyle = "#e8e0c0"; p.fillRect(ax + dx - 1, ay - 7, 2, 7); ditherGlow(p, ax + dx, ay - 9, 8, 10, "#ffce6a", 0.55); p.fillStyle = "#fff0c0"; p.fillRect(ax + dx, ay - 9 - fl, 1, 2); } // two candles (a real light)
-    p.fillStyle = "#2a2418"; p.fillRect(Math.round(pw * 0.78), ph - Math.round(ph * 0.1), Math.round(pw * 0.1), Math.round(ph * 0.1)); // the hole down into the dark
+    // the altar: a stepped stone block — plinth, body with shadowed flank, lit slab
+    p.fillStyle = "#141210"; p.fillRect(ax - 19, ay + 12, 38, 2); // its shadow on the floor
+    p.fillStyle = "#6a6250"; p.fillRect(ax - 18, ay + 10, 36, 3); p.fillStyle = "#847a62"; p.fillRect(ax - 18, ay + 10, 36, 1); // plinth step
+    p.fillStyle = "#8a8068"; p.fillRect(ax - 16, ay, 32, 10); // body
+    p.fillStyle = "#6e654f"; p.fillRect(ax + 12, ay, 4, 10); // candle-shadowed flank
+    p.fillStyle = "#5a5240"; for (let yy = ay + 3; yy < ay + 10; yy += 3) p.fillRect(ax - 16, yy, 32, 1); // masonry courses
+    p.fillStyle = "#b0a482"; p.fillRect(ax - 17, ay - 2, 34, 2); p.fillStyle = "#c6ba94"; p.fillRect(ax - 17, ay - 2, 34, 1); // the candle-lit slab on top
+    // the large black book, lying open-side out in the centre of the altar
+    p.fillStyle = "#0c0a10"; p.fillRect(ax - 5, ay - 8, 10, 6); // black cover
+    p.fillStyle = "#26222e"; p.fillRect(ax - 5, ay - 8, 10, 1); p.fillRect(ax - 5, ay - 8, 1, 6); // its lamplit spine edge
+    p.fillStyle = "#d8d0b4"; p.fillRect(ax - 4, ay - 3, 8, 1); // pale page edges under the cover
+    for (const dx of [-11, 11]) { const fl = Math.sin(t * 8 + dx) > 0 ? 1 : 0; p.fillStyle = "#e8e0c0"; p.fillRect(ax + dx - 1, ay - 9, 2, 7); ditherGlow(p, ax + dx, ay - 11, 8, 10, "#ffce6a", 0.55); p.fillStyle = "#fff0c0"; p.fillRect(ax + dx, ay - 11 - fl, 1, 2); } // two burning candles at the ends
+    // the hole down into the dark: a recessed pit, not a flat patch
+    const hx = Math.round(pw * 0.82), hy2 = ph - Math.round(ph * 0.08);
+    p.fillStyle = "#7a7058"; p.fillRect(hx - 12, hy2 - 2, 24, 2); // worn stone lip
+    for (let d = 0; d < 4; d++) { const v = Math.max(3, 14 - d * 4); p.fillStyle = `rgb(${v + 3},${v + 1},${v - 1})`; p.fillRect(hx - 12 + d * 2, hy2 + d * 2, 24 - d * 4, ph); }
   });
 }
 function onRainbowPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -1725,8 +1783,40 @@ function engravingsCavePixel(ctx: CanvasRenderingContext2D, w: number, h: number
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = lampPal("dungeon", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
     p.fillStyle = "#0b0b0d"; for (let x = 0; x < pw; x++) { const ty = Math.round(ph * 0.18 + Math.abs(Math.sin(x * 0.08)) * 6); p.fillRect(x, 0, 1, ty); } // low ceiling
-    p.fillStyle = pal.wallHi ? `rgba(${pal.wallHi.join(",")},0.5)` : "#665"; // ancient engravings carved on the walls
-    for (let gy = 0; gy < 3; gy++) for (let gx = 0; gx < 10; gx++) { const bx = 8 + gx * Math.round((pw - 16) / 10), by = Math.round(ph * 0.24) + gy * 12; p.fillRect(bx, by, 5, 1); p.fillRect(bx, by, 1, 5); p.fillRect(bx + 4, by + 2, 1, 3); p.fillRect(bx + 1, by + 4, 3, 1); }
+    // a dressed band of wall the old carvers smoothed for their frieze — shaded
+    // by the lamp below, so it belongs to the room instead of floating on it
+    const fy0 = Math.round(ph * 0.26), fh = 26, fx0 = 14, fx1 = pw - 14;
+    for (let y = fy0; y < fy0 + fh; y++) for (let x = fx0; x < fx1; x++) {
+      if (x < fx0 + 4 && hash(x, y >> 1) > 0.5 + (x - fx0) * 0.12) continue; // broken ragged ends
+      if (x > fx1 - 5 && hash(x, y >> 1) > 0.5 + (fx1 - x) * 0.12) continue;
+      const k = hash(x >> 2, y >> 2);
+      let c: number[] = k > 0.7 ? [58, 54, 48] : [48, 44, 38];
+      const dxl = Math.abs(x - pw * 0.5) / (pw * 0.5), dyl = (fy0 + fh - y) / fh; // lamp falloff: dim toward top and sides
+      c = mix(c, [10, 9, 8], Math.min(0.62, dxl * 0.45 + dyl * 0.38));
+      p.fillStyle = `rgb(${qcol(c, dth(x, y)).join(",")})`; p.fillRect(x, y, 1, 1);
+    }
+    p.fillStyle = "#1b1814"; p.fillRect(fx0 + 3, fy0 + fh, fx1 - fx0 - 6, 1); // chiseled base groove
+    p.fillStyle = "#443f36"; p.fillRect(fx0 + 3, fy0 + fh + 1, fx1 - fx0 - 6, 1); // its lit lower lip
+    // the engravings: varied ancient glyphs, each cut as a dark groove with a
+    // lamplit lower edge so the relief reads
+    const glyph = (bx: number, by: number, kind: number) => {
+      const dim = Math.min(1, Math.abs(bx - pw * 0.5) / (pw * 0.5) + 0.25);
+      const G = "#14110d", L = dim > 0.7 ? "#3e382e" : "#5c554a";
+      const seg = (x: number, y: number, w2: number, h2: number) => { p.fillStyle = G; p.fillRect(bx + x, by + y, w2, h2); p.fillStyle = L; p.fillRect(bx + x, by + y + h2, w2, 1); };
+      switch (kind % 6) {
+        case 0: seg(0, 0, 6, 1); seg(0, 2, 4, 1); seg(0, 4, 6, 1); break; // stacked bars
+        case 1: seg(0, 0, 1, 6); seg(2, 1, 1, 5); seg(4, 0, 1, 6); break; // reeds
+        case 2: seg(0, 0, 5, 1); seg(4, 1, 1, 3); seg(1, 4, 4, 1); seg(1, 2, 1, 2); break; // square spiral
+        case 3: seg(2, 0, 2, 2); seg(1, 3, 4, 1); seg(1, 5, 1, 2); seg(4, 5, 1, 2); break; // little figure
+        case 4: for (let k = 0; k < 4; k++) seg(k * 2, (k % 2) * 2, 2, 1); break; // zigzag water
+        case 5: seg(1, 1, 3, 3); seg(0, 2, 1, 1); seg(4, 2, 1, 1); seg(2, 0, 1, 1); seg(2, 4, 1, 1); break; // sun disc
+      }
+    };
+    for (let row = 0; row < 2; row++) for (let col = 0; col < 11; col++) {
+      if (hash(col, row * 7 + 3) < 0.14) continue; // weathered-away gaps
+      glyph(fx0 + 6 + col * Math.round((fx1 - fx0 - 14) / 11), fy0 + 4 + row * 11, Math.floor(hash(col * 3, row) * 6));
+    }
+    p.fillStyle = "#14110d"; for (let i = 0; i < 5; i++) { const x = fx0 + 4 + Math.round(hash(i, 31) * (fx1 - fx0 - 12)); p.fillRect(x, fy0 + Math.round(hash(i, 32) * fh), 1 + Math.round(hash(i, 33) * 3), 1); } // age cracks through the frieze
     darkArch(p, Math.round(pw * 0.04), floorY - Math.round(ph * 0.2), Math.round(pw * 0.07), Math.round(ph * 0.2), rim); // nw
     darkArch(p, Math.round(pw * 0.9), floorY - Math.round(ph * 0.2), Math.round(pw * 0.07), Math.round(ph * 0.2), rim); // east
     void t;
@@ -1867,21 +1957,59 @@ function riverScene(rough: boolean, eastCliff: boolean, westBeach: boolean, buoy
 function damBasePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     canyonBackdrop(p, pw, ph, false, false);
-    // the dam looming above & to the north (a vast concrete wall up top)
-    p.fillStyle = "#5a5a60"; p.fillRect(0, 0, pw, Math.round(ph * 0.34));
-    p.fillStyle = "#46464c"; for (let y = 0; y < ph * 0.34; y += 4) p.fillRect(0, y, pw, 1); for (let x = 0; x < pw; x += 18) { p.fillStyle = "#2a3848"; p.fillRect(x, 0, 2, Math.round(ph * 0.34)); }
-    whiteCliff(p, 0, Math.round(pw * 0.12), Math.round(ph * 0.34), ph); whiteCliff(p, Math.round(pw * 0.88), pw, Math.round(ph * 0.34), ph); // White Cliffs along the river
-    waterFill(p, pw, Math.round(ph * 0.6), ph, t, "#356a8c", "#234e6c"); // the Frigid flowing by
-    p.fillStyle = "#7a5a8a"; for (let i = 0; i < 4; i++) p.fillRect(Math.round(pw * 0.42) + i * 3, Math.round(ph * 0.58), 6, 4); // pile of plastic
-    void t;
+    const open = rf("DAM-ROOM", "gatesOpen");
+    // the dam TOWERS above you to the north: a vast curved face, crest against the sky
+    const crestY = Math.round(ph * 0.08), footY = Math.round(ph * 0.62);
+    const x0 = Math.round(pw * 0.1), x1 = Math.round(pw * 0.9);
+    for (let y = crestY; y < footY; y++) {
+      const f = (y - crestY) / (footY - crestY);
+      const inset = Math.round((1 - f) * pw * 0.05); // the face leans back as it rises
+      for (let x = x0 + inset; x < x1 - inset; x++) {
+        const k = hash(x >> 2, y >> 2);
+        let c = k > 0.8 ? "#6a6a72" : k > 0.35 ? "#5a5a62" : "#4c4c54";
+        if (y % 6 === 5) c = "#3e3e46"; // lift lines
+        if (((x - x0) % 24) === 12) c = "#42424a"; // construction joints
+        p.fillStyle = c; p.fillRect(x, y, 1, 1);
+      }
+    }
+    p.fillStyle = "#8a8e9a"; p.fillRect(x0 + Math.round(pw * 0.05) - 2, crestY - 2, x1 - x0 - Math.round(pw * 0.1) + 4, 2); // the lit crest, impossibly high
+    p.fillStyle = "#2e3038"; for (let x = x0 + Math.round(pw * 0.05) + 3; x < x1 - Math.round(pw * 0.05); x += 12) p.fillRect(x, crestY - 5, 1, 3); // railing posts, tiny with distance
+    // the outlets at the foot — the river is born here
+    for (const gxf of [0.34, 0.5, 0.66]) {
+      const gx = Math.round(pw * gxf);
+      p.fillStyle = "#16181e"; p.fillRect(gx - 7, footY - 12, 14, 12);
+      if (open) { for (let y = footY - 11; y < footY + 4; y++) for (let xx = -7; xx <= 7; xx++) { const v = hash(xx + gx, (y >> 1) + Math.floor(t * 9)); if (v > 0.45) { p.fillStyle = v > 0.8 ? "#dfeaf2" : "#6fa0be"; p.fillRect(gx + xx, y, 1, 1); } } }
+      else { p.fillStyle = "#3a3c43"; p.fillRect(gx - 6, footY - 11, 12, 10); p.fillStyle = "#54565e"; p.fillRect(gx - 6, footY - 11, 12, 1); }
+    }
+    // churn at the base + the Frigid flowing south past you
+    waterFill(p, pw, footY, ph, t, "#356a8c", "#234e6c");
+    for (let x = 0; x < pw; x++) if (hash(x, Math.floor(t * 6)) > (open ? 0.4 : 0.75)) { p.fillStyle = "#cfe0ea"; p.fillRect(x, footY + Math.round(hash(x, 9) * 4), 1, 1); } // white water at the foot
+    whiteCliff(p, 0, Math.round(pw * 0.1), Math.round(ph * 0.3), ph); whiteCliff(p, Math.round(pw * 0.9), pw, Math.round(ph * 0.3), ph); // the gorge walls
+    // the folded pile of plastic (the boat, deflated) on the near bank
+    const bx2 = Math.round(pw * 0.44), by2 = ph - 8;
+    p.fillStyle = "#3a2a44"; p.fillRect(bx2 - 2, by2 - 1, 16, 5);
+    p.fillStyle = "#7a5a8a"; p.fillRect(bx2, by2, 12, 3); p.fillStyle = "#9a7aac"; p.fillRect(bx2, by2, 12, 1); p.fillStyle = "#54406a"; p.fillRect(bx2 + 4, by2 + 1, 2, 2); // folds
   });
 }
 function damLobbyPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const floorY = interiorBackdrop(p, pw, ph, { wallTop: [56, 56, 60], wallBot: [34, 34, 38], floorTop: [62, 60, 58], floorBot: [32, 31, 30], floorHi: [80, 78, 76], plank: "#26252a", seam: "#1a1a1e", light: { x: pw * 0.5, y: ph * 0.3, rx: pw * 0.85, ry: ph, col: [170, 175, 185], peak: 0.4 } }, t);
     // two doorways marked "Private" (north + east)
-    for (const fx of [0.3, 0.86]) { const x = Math.round(pw * fx); darkArch(p, x - Math.round(pw * 0.05), Math.round(ph * 0.2), Math.round(pw * 0.1), Math.round(ph * 0.4), "#6a6a72"); p.fillStyle = "#caa24a"; p.fillRect(x - 8, Math.round(ph * 0.16), 16, 2); } // sign plates
-    p.fillStyle = "#8a3a2a"; p.fillRect(Math.round(pw * 0.5) - 4, floorY + Math.round((ph - floorY) * 0.4), 8, 5); p.fillStyle = "#c86a4a"; p.fillRect(Math.round(pw * 0.5) - 4, floorY + Math.round((ph - floorY) * 0.4), 8, 1); // matchbook
+    for (const fx of [0.24, 0.86]) { const x = Math.round(pw * fx); darkArch(p, x - Math.round(pw * 0.05), Math.round(ph * 0.2), Math.round(pw * 0.1), Math.round(ph * 0.4), "#6a6a72"); p.fillStyle = "#caa24a"; p.fillRect(x - 8, Math.round(ph * 0.16), 16, 2); p.fillStyle = "#7a6228"; p.fillRect(x - 8, Math.round(ph * 0.17), 16, 1); } // "PRIVATE" plates
+    // the visitors' display: a framed diagram of mighty FCD#3
+    const dxp = Math.round(pw * 0.52), dyp = Math.round(ph * 0.22), dwp = 46, dhp = 26;
+    p.fillStyle = "#3a3e44"; p.fillRect(dxp - 2, dyp - 2, dwp + 4, dhp + 4); p.fillStyle = "#14181e"; p.fillRect(dxp, dyp, dwp, dhp); // frame + field
+    p.fillStyle = "#46586a"; p.fillRect(dxp + 3, dyp + 4, dwp - 6, 6); // the reservoir, in diagram blue
+    p.fillStyle = "#8a8e9a"; for (let yy = 0; yy < 12; yy++) p.fillRect(dxp + 18 - (yy >> 2), dyp + 10 + yy, 8 + (yy >> 1), 1); // the dam wedge
+    p.fillStyle = "#5a7a96"; p.fillRect(dxp + 30, dyp + 18, dwp - 33, 3); // the river below
+    p.fillStyle = "#caa24a"; p.fillRect(dxp + 4, dyp + dhp - 5, 14, 2); // caption bar
+    // the tour table: guidebooks in a rack + the matchbook
+    const tx2 = Math.round(pw * 0.5), ty2 = floorY + Math.round((ph - floorY) * 0.35);
+    p.fillStyle = "#101216"; p.fillRect(tx2 - 21, ty2 - 1, 42, 4);
+    p.fillStyle = "#4a4e58"; p.fillRect(tx2 - 20, ty2, 40, 2); p.fillStyle = "#6a6e78"; p.fillRect(tx2 - 20, ty2, 40, 1); // formica top
+    p.fillStyle = "#33363e"; p.fillRect(tx2 - 18, ty2 + 2, 2, 10); p.fillRect(tx2 + 16, ty2 + 2, 2, 10); // legs
+    for (let i = 0; i < 3; i++) { p.fillStyle = i % 2 ? "#b8b09a" : "#a89e86"; p.fillRect(tx2 - 14 + i * 2, ty2 - 7 + i, 3, 7 - i); } // the leaning stack of guidebooks
+    p.fillStyle = "#8a3a2a"; p.fillRect(tx2 + 6, ty2 - 3, 7, 3); p.fillStyle = "#c86a4a"; p.fillRect(tx2 + 6, ty2 - 3, 7, 1); // the matchbook
     void t;
   });
 }
@@ -1900,7 +2028,13 @@ function sandyBeachPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t:
     const wy = riverBase(p, pw, ph, t, false);
     sandBand(p, 0, pw, wy + Math.round((ph - wy) * 0.3), ph); // large sandy beach
     darkArch(p, Math.round(pw * 0.8), wy - 2, Math.round(pw * 0.1), Math.round(ph * 0.12), "#a8975f"); // passage half-buried in sand (NE)
-    const sx = Math.round(pw * 0.45), sy = ph - Math.round(ph * 0.14); p.fillStyle = "#8a8e96"; p.fillRect(sx, sy - 12, 2, 12); p.fillStyle = "#b8bcc4"; p.fillRect(sx - 3, sy - 16, 8, 5); p.fillStyle = "#6a4a2a"; p.fillRect(sx, sy, 2, 4); // shovel
+    // the shovel, planted blade-down in the sand
+    const sx = Math.round(pw * 0.45), sy = ph - Math.round(ph * 0.14);
+    p.fillStyle = "#6a4a2a"; p.fillRect(sx, sy - 16, 2, 12); // wooden shaft
+    p.fillStyle = "#8a6a3a"; p.fillRect(sx - 3, sy - 18, 8, 2); p.fillStyle = "#54401f"; p.fillRect(sx - 3, sy - 16, 2, 1); p.fillRect(sx + 3, sy - 16, 2, 1); // T-grip
+    p.fillStyle = "#9aa0a8"; for (let k = 0; k < 5; k++) p.fillRect(sx - 3 + (k >> 1), sy - 4 + k, 8 - k, 1); // steel blade, biting in
+    p.fillStyle = "#c8ccd2"; p.fillRect(sx - 3, sy - 4, 1, 2); // edge glint
+    p.fillStyle = "#b8a86a"; p.fillRect(sx - 5, sy + 1, 12, 2); // kicked-up sand at the blade
   });
 }
 function sandyCavePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -1978,23 +2112,86 @@ function shaftRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: 
     void t;
   });
 }
+// a wooden mine ladder with real rails, lit stiles, and shadowed rungs
+function mineLadder(p: CanvasRenderingContext2D, lx: number, topY: number, botY: number, lean = 0) {
+  for (let y = topY; y < botY; y++) {
+    const off = Math.round(((y - topY) / Math.max(1, botY - topY)) * lean);
+    p.fillStyle = "#6a4f2c"; p.fillRect(lx - 6 + off, y, 2, 1); p.fillRect(lx + 4 + off, y, 2, 1); // rails
+    p.fillStyle = "#8a6a3a"; p.fillRect(lx - 6 + off, y, 1, 1); p.fillRect(lx + 4 + off, y, 1, 1); // lamplit stile edges
+  }
+  for (let y = topY + 3; y < botY - 1; y += 6) {
+    const off = Math.round(((y - topY) / Math.max(1, botY - topY)) * lean);
+    p.fillStyle = "#5a4326"; p.fillRect(lx - 4 + off, y, 8, 2);
+    p.fillStyle = "#7a5a32"; p.fillRect(lx - 4 + off, y, 8, 1); // lit rung tops
+    if (hash(lx, y) > 0.8) { p.fillStyle = "#3a2c1a"; p.fillRect(lx - 1 + off, y, 3, 2); } // a split rung — rickety
+  }
+}
+// a stairway CUT into the cave wall: a dark ragged-edged opening with treads
+// climbing back and up inside it, each lip catching the lamp less as it recedes
+function rockStairs(p: CanvasRenderingContext2D, cx: number, baseY: number, steps: number, dirx = 1, w0 = 13) {
+  const topY = baseY - steps * 6 - 10;
+  for (let y = topY; y < baseY; y++) { // the cut mouth, receding to black at the top
+    const f = (y - topY) / (baseY - topY);
+    const ww = Math.round(w0 * (0.5 + 0.5 * f)) + Math.round((hash(3, y >> 1) - 0.5) * 3);
+    const xc = cx + Math.round(dirx * (1 - f) * w0 * 0.4);
+    const v = Math.max(2, Math.round(2 + f * 9));
+    p.fillStyle = `rgb(${v + 2},${v + 1},${v})`; p.fillRect(xc - ww, y, ww * 2, 1);
+  }
+  p.fillStyle = "#3e382e"; // worn jambs where the cut meets the cave wall
+  for (let y = topY + 6; y < baseY; y += 2) {
+    const f = (y - topY) / (baseY - topY);
+    const ww = Math.round(w0 * (0.5 + 0.5 * f)) + 1, xc = cx + Math.round(dirx * (1 - f) * w0 * 0.4);
+    if (hash(xc, y) > 0.45) p.fillRect(xc - ww - 1, y, 1, 2);
+    if (hash(xc + 7, y) > 0.45) p.fillRect(xc + ww, y, 1, 2);
+  }
+  for (let s = 0; s < steps; s++) { // the treads, climbing away from the lamp
+    const f = s / steps, y = baseY - 2 - s * 5;
+    const ww = Math.round(w0 * (0.92 - f * 0.42)), xc = cx + Math.round(dirx * f * w0 * 0.4);
+    const lit = Math.round(60 * (1 - f * 0.72));
+    p.fillStyle = `rgb(${Math.round(lit * 0.42)},${Math.round(lit * 0.4)},${Math.round(lit * 0.34)})`; p.fillRect(xc - ww, y, ww * 2, 5); // riser in shadow
+    p.fillStyle = `rgb(${lit},${Math.max(0, lit - 6)},${Math.max(0, lit - 14)})`; p.fillRect(xc - ww, y - 1, ww * 2, 2); // lamplit tread lip
+    if (hash(s, 9) > 0.6) { p.fillStyle = "#0e0c0a"; p.fillRect(xc - ww + 2 + Math.round(hash(s, 10) * ww * 1.4), y - 1, 2, 1); } // a chipped lip
+  }
+  p.fillStyle = "#11100d"; p.fillRect(cx - w0 - 2, baseY, w0 * 2 + 4, 2); // its shadow at the cave floor
+}
 function gasRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = lampPal("mine", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
     coalVeins(p, pw, floorY);
-    for (let i = 0; i < 6; i++) { const x = ((t * 12 + i * 60) % (pw + 80)) - 40; ditherGlow(p, x, ph * (0.3 + i % 3 * 0.12), 30, 14, "#8aa84a", 0.18); } // coal-gas haze
-    p.fillStyle = "#2a2520"; for (let s = 0; s < 4; s++) p.fillRect(Math.round(pw * 0.06), floorY - 4 - s * Math.round(ph * 0.05), Math.round(pw * 0.1 - s * 3), Math.round(ph * 0.05)); // stairs up
-    darkArch(p, Math.round(pw * 0.88), floorY - Math.round(ph * 0.2), Math.round(pw * 0.07), Math.round(ph * 0.2), rim); // tunnel east
-    treasureGlint(p, Math.round(pw * 0.5), floorY + Math.round((ph - floorY) * 0.4), t, "#5a9aff"); p.strokeStyle = "#7fc0ff"; p.beginPath(); p.ellipse(Math.round(pw * 0.5), floorY + Math.round((ph - floorY) * 0.4), 5, 3, 0, 0, Math.PI * 2); p.stroke(); // sapphire bracelet
+    rockStairs(p, Math.round(pw * 0.14), floorY + 6, 5, 1); // the short climb up
+    darkArch(p, Math.round(pw * 0.88), floorY - Math.round(ph * 0.2), Math.round(pw * 0.07), Math.round(ph * 0.2), rim); // narrow tunnel east
+    // coal gas: sick yellow-green wisps seeping up out of floor cracks and pooling
+    // under the ceiling — dithered pixel ribbons, no soft glow
+    p.fillStyle = "#0a0c06"; for (const fx of [0.3, 0.55, 0.72]) p.fillRect(Math.round(pw * fx) - 4, floorY + Math.round((ph - floorY) * (0.3 + fx * 0.4)), 9, 1); // the cracks it leaks from
+    for (let i = 0; i < 3; i++) {
+      const gx = pw * (0.3 + i * 0.22), base = floorY + (ph - floorY) * (0.42 + i * 0.09);
+      for (let k = 0; k < 34; k++) {
+        const yy = base - k * 1.8, f = k / 34;
+        const xx = gx + Math.sin(yy * 0.16 + t * 0.9 + i * 2.1) * (2 + f * 7);
+        const a = (1 - f) * 0.75 + 0.15;
+        if (a > dth(Math.round(xx), Math.round(yy))) { p.fillStyle = f > 0.6 ? "#5a6e2e" : "#79904a"; p.fillRect(Math.round(xx), Math.round(yy), 2, 1); }
+      }
+    }
+    for (let x = 0; x < pw; x += 2) { const cy = 16 + Math.round(Math.sin(x * 0.06 + t * 0.5) * 3); if (0.4 > dth(x, cy)) { p.fillStyle = "#4a5a28"; p.fillRect(x, cy, 2, 1); } } // gas pooled along the ceiling
+    // the sapphire-encrusted bracelet: a pixel-honest gold hoop with blue stones
+    const bx = Math.round(pw * 0.5), by = floorY + Math.round((ph - floorY) * 0.42);
+    treasureGlint(p, bx, by - 3, t, "#5a9aff");
+    p.fillStyle = "#caa24a"; p.fillRect(bx - 5, by - 1, 10, 1); p.fillRect(bx - 6, by, 12, 2); p.fillRect(bx - 5, by + 2, 10, 1); // the hoop, seen at a shallow angle
+    p.fillStyle = "#8a6a24"; p.fillRect(bx - 4, by + 1, 8, 1); // its dark inner rim
+    p.fillStyle = "#4a8aff"; for (const dx of [-5, -2, 1, 4]) p.fillRect(bx + dx, by, 1, 1); // sapphires
+    p.fillStyle = "#bfe0ff"; p.fillRect(bx - 2, by, 1, 1); // one catching the lamp
   });
 }
 function ladderTopPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = lampPal("mine", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t);
     coalVeins(p, pw, floorY);
-    const lx = Math.round(pw * 0.78); p.fillStyle = "#6a4f2c"; p.fillRect(lx - 5, floorY - Math.round(ph * 0.1), 2, ph - floorY + Math.round(ph * 0.1)); p.fillRect(lx + 3, floorY - Math.round(ph * 0.1), 2, ph - floorY + Math.round(ph * 0.1)); for (let r = 0; r < 7; r++) p.fillRect(lx - 5, floorY - Math.round(ph * 0.08) + r * 6, 10, 1); // rickety ladder down
-    p.fillStyle = "#040405"; p.fillRect(lx - 7, ph - Math.round(ph * 0.08), 16, Math.round(ph * 0.08));
-    p.fillStyle = "#2a2520"; for (let s = 0; s < 4; s++) p.fillRect(Math.round(pw * 0.08), Math.round(ph * 0.2) + s * Math.round(ph * 0.06), Math.round(pw * 0.12 - s * 3), Math.round(ph * 0.05)); // staircase up
+    rockStairs(p, Math.round(pw * 0.14), floorY + 4, 5, 1); // the way back up
+    // the hole in the floor the ladder drops through: recessed, with a worn lip
+    const lx = Math.round(pw * 0.72), hy = floorY + Math.round((ph - floorY) * 0.5);
+    p.fillStyle = "#4a443a"; p.fillRect(lx - 13, hy - 2, 26, 2); // lamplit stone lip
+    for (let d = 0; d < 5; d++) { const v = Math.max(2, 16 - d * 4); p.fillStyle = `rgb(${v},${v - 1},${v - 2})`; p.fillRect(lx - 13 + d * 2, hy + d * 2, 26 - d * 4, ph); } // stepping down into black
+    mineLadder(p, lx, hy - Math.round(ph * 0.09), ph, 2); // the rickety ladder, poking up out of the hole and running down out of frame
     void t;
   });
 }
@@ -2002,7 +2199,12 @@ function ladderBottomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, 
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = lampPal("mine", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
     coalVeins(p, pw, floorY);
-    const lx = Math.round(pw * 0.84); p.fillStyle = "#6a4f2c"; p.fillRect(lx - 5, Math.round(ph * 0.06), 2, floorY - Math.round(ph * 0.06)); p.fillRect(lx + 3, Math.round(ph * 0.06), 2, floorY - Math.round(ph * 0.06)); for (let r = 0; r < 8; r++) p.fillRect(lx - 5, Math.round(ph * 0.1) + r * 6, 10, 1); // ladder up
+    // the ladder runs up into a dark chimney in the ceiling
+    const lx = Math.round(pw * 0.8);
+    p.fillStyle = "#060607"; p.fillRect(lx - 12, 0, 24, Math.round(ph * 0.16));
+    p.fillStyle = "#2c2822"; p.fillRect(lx - 12, Math.round(ph * 0.16) - 1, 24, 1); // the chimney rim overhead
+    mineLadder(p, lx, 0, floorY + 6, -2);
+    p.fillStyle = "#1c1814"; p.fillRect(lx - 8, floorY + 5, 16, 2); // its shadow where it foots the floor
     darkArch(p, Math.round(pw * 0.04), floorY - Math.round(ph * 0.22), Math.round(pw * 0.07), Math.round(ph * 0.22), rim); // west
     darkArch(p, Math.round(pw * 0.46), ph - Math.round(ph * 0.12), Math.round(pw * 0.08), Math.round(ph * 0.12), rim); // south
     void t;
@@ -2012,20 +2214,49 @@ function timberRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t:
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = lampPal("mine", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
     coalVeins(p, pw, floorY);
-    p.fillStyle = "#5a4326"; for (let i = 0; i < 9; i++) { const x = Math.round(pw * (0.18 + i * 0.07)), y = floorY + Math.round((ph - floorY) * 0.3) + Math.round((hash(i, 2) - 0.5) * 14), len = 16 + Math.round(hash(i, 3) * 14), ang = (hash(i, 4) - 0.5) * 1.2; for (let k = 0; k < len; k++) p.fillRect(x + Math.round(Math.cos(ang) * k), y + Math.round(Math.sin(ang) * k), 2, 2); } // broken timbers
+    // a broken shoring frame still standing — one post snapped, the cap sagging
+    const capY = Math.round(ph * 0.12);
+    p.fillStyle = "#3a2c1c"; for (let x = Math.round(pw * 0.14); x < pw * 0.86; x++) p.fillRect(x, capY + Math.round((x - pw * 0.5) * (x - pw * 0.5) * 0.0006), 1, 5); // the sagging cap beam
+    p.fillStyle = "#5a4326"; p.fillRect(Math.round(pw * 0.14), capY, 6, floorY - capY); p.fillStyle = "#7a5a32"; p.fillRect(Math.round(pw * 0.14), capY, 2, floorY - capY); // the sound post
+    const bx = Math.round(pw * 0.84); // the snapped post: stub below, splintered stump hanging above
+    p.fillStyle = "#5a4326"; p.fillRect(bx, floorY - 14, 6, 14); p.fillRect(bx - 2, capY, 6, 12);
+    p.fillStyle = "#8a6a3a"; for (const [sx2, sy2] of [[0, -14], [2, -17], [4, -15], [-1, 11], [2, 13]] as const) p.fillRect(bx + 2 + sx2, (sy2 < 0 ? floorY : capY) + sy2, 1, 4); // pale splinters at both breaks
+    // broken timbers strewn in a criss-crossed heap — thick beams with lit tops
+    for (let i = 0; i < 7; i++) {
+      const x = Math.round(pw * (0.2 + i * 0.09)), y = floorY + Math.round((ph - floorY) * 0.34) + Math.round((hash(i, 2) - 0.5) * 16);
+      const len = 22 + Math.round(hash(i, 3) * 16), ang = (hash(i, 4) - 0.5) * 0.9, ca = Math.cos(ang), sa = Math.sin(ang);
+      for (let k = 0; k < len; k++) {
+        const tx2 = x + Math.round(ca * k), ty2 = y + Math.round(sa * k);
+        p.fillStyle = "#241a0e"; p.fillRect(tx2, ty2 + 3, 2, 1); // underside shadow
+        p.fillStyle = "#4a3a22"; p.fillRect(tx2, ty2 + 1, 2, 2); // body
+        p.fillStyle = "#6f5630"; p.fillRect(tx2, ty2, 2, 1); // lamplit top
+      }
+      p.fillStyle = "#8a6a3a"; p.fillRect(x + Math.round(ca * len), y + Math.round(sa * len) - 1, 2, 4); // raw split end
+    }
     for (let i = 0; i < 5; i++) { const x = ((t * 14 + i * 50) % pw); p.fillStyle = "rgba(160,170,180,0.10)"; p.fillRect(Math.round(x), Math.round(ph * 0.3), 2, floorY - Math.round(ph * 0.3)); } // draft from the west
     darkArch(p, Math.round(pw * 0.04), floorY - Math.round(ph * 0.18), Math.round(pw * 0.06), Math.round(ph * 0.18), rim);
-    darkArch(p, Math.round(pw * 0.88), floorY - Math.round(ph * 0.22), Math.round(pw * 0.08), Math.round(ph * 0.22), rim);
+    darkArch(p, Math.round(pw * 0.9), floorY - Math.round(ph * 0.22), Math.round(pw * 0.07), Math.round(ph * 0.22), rim);
   });
 }
 function lowerShaftPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = lampPal("mine", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
     coalVeins(p, pw, floorY);
-    const sx = Math.round(pw * 0.5); p.fillStyle = "#0a0a0e"; p.fillRect(sx - Math.round(pw * 0.1), 0, Math.round(pw * 0.2), Math.round(ph * 0.4)); // long shaft above
-    p.fillStyle = "#8a8a92"; for (let y = 2; y < ph * 0.4; y += 3) p.fillRect(sx, y, 1, 2); // iron chain
-    if (rf("SHAFT-ROOM", "basketLowered")) { p.fillStyle = "#7a5a32"; p.fillRect(sx - 6, Math.round(ph * 0.4), 12, 6); p.fillStyle = "#5a4022"; p.fillRect(sx - 6, Math.round(ph * 0.4), 12, 1); } // the basket, lowered to here
-    else { p.fillStyle = "#8a8a92"; p.fillRect(sx - 1, Math.round(ph * 0.4), 3, 2); } // just the chain end (basket is up top)
+    // the long shaft overhead: a timber-framed mouth receding into black
+    const sx = Math.round(pw * 0.5), sw = Math.round(pw * 0.18), mouthY = Math.round(ph * 0.38);
+    for (let d = 0; d < 4; d++) { const v = Math.max(3, 14 - d * 4), inw = d * 3; p.fillStyle = `rgb(${v + 2},${v + 1},${v + 3})`; p.fillRect(sx - (sw >> 1) + inw, 0, sw - inw * 2, mouthY - d * 2); } // walls stepping up into dark
+    p.fillStyle = "#4a3a24"; p.fillRect(sx - (sw >> 1) - 3, mouthY - 2, sw + 6, 3); p.fillStyle = "#6a5434"; p.fillRect(sx - (sw >> 1) - 3, mouthY - 2, sw + 6, 1); // the timbered mouth frame
+    p.fillStyle = "#3a2c1a"; p.fillRect(sx - (sw >> 1) - 3, mouthY - 12, 3, 12); p.fillRect(sx + (sw >> 1), mouthY - 12, 3, 12); // side timbers
+    const sway = Math.round(Math.sin(t * 0.8) * 1);
+    p.fillStyle = "#8a8a92"; for (let y = 2; y < mouthY + 6; y += 3) p.fillRect(sx + sway, y, 1, 2); // the iron chain, swaying faintly
+    if (rf("SHAFT-ROOM", "basketLowered")) { // the basket has come all the way down
+      const by2 = mouthY + 14;
+      p.fillStyle = "#8a8a92"; for (let y = mouthY + 6; y < by2 - 8; y += 3) p.fillRect(sx + sway, y, 1, 2);
+      p.fillStyle = "#54402a"; p.fillRect(sx - 7 + sway, by2 - 8, 14, 8);
+      p.fillStyle = "#7a5a32"; for (let yy = by2 - 7; yy < by2 - 1; yy += 2) p.fillRect(sx - 6 + sway, yy, 12, 1); // wicker bands
+      p.fillStyle = "#3a2c1a"; p.fillRect(sx - 7 + sway, by2 - 1, 14, 1);
+      p.fillStyle = "#8a8a92"; p.fillRect(sx - 6 + sway, by2 - 12, 1, 4); p.fillRect(sx + 5 + sway, by2 - 12, 1, 4); // bail wires
+    } else { p.fillStyle = "#8a8a92"; p.fillRect(sx - 1 + sway, mouthY + 6, 3, 2); } // just the chain's hook end — the basket is up top
     for (let i = 0; i < 4; i++) { const x = ((t * 16 + i * 60) % pw); p.fillStyle = "rgba(160,170,180,0.10)"; p.fillRect(Math.round(x), Math.round(ph * 0.45), 2, floorY - Math.round(ph * 0.45)); } // drafty
     darkArch(p, Math.round(pw * 0.46), ph - Math.round(ph * 0.12), Math.round(pw * 0.08), Math.round(ph * 0.12), rim); // south
     darkArch(p, Math.round(pw * 0.9), floorY - Math.round(ph * 0.16), Math.round(pw * 0.05), Math.round(ph * 0.16), rim); // very narrow east
@@ -2059,7 +2290,19 @@ function machineRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t
 function coalMinePixel(seed: number) {
   return (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = lampPal("mine", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
-    coalVeins(p, pw, floorY); mineTimbers(p, pw, ph, floorY);
+    coalVeins(p, pw, floorY);
+    // a thick coal seam banding through the rock — angle and height differ per
+    // twist of the mine, so the "all alike" passages still read as places
+    const sy0 = ph * (0.2 + (seed % 4) * 0.07), slope = [0.1, -0.14, 0.05, -0.06][seed % 4], thick = 5 + (seed % 3) * 2;
+    for (let x = 0; x < pw; x++) {
+      const yc = sy0 + x * slope + Math.sin(x * 0.05 + seed) * 2;
+      for (let dy = 0; dy < thick; dy++) { const y = Math.round(yc + dy), k = hash(x >> 1, y >> 1); p.fillStyle = k > 0.8 ? "#22242c" : k < 0.2 ? "#050507" : "#101116"; p.fillRect(x, y, 1, 1); }
+      if (hash(x >> 2, seed) > 0.7) { p.fillStyle = "#3a3d48"; p.fillRect(x, Math.round(yc + (hash(x, seed) * thick)), 1, 1); } // anthracite glitter
+    }
+    // pick scars where miners chased the seam
+    p.fillStyle = "#1c1a16"; for (let i = 0; i < 8; i++) { const x = Math.round(hash(i, seed * 5 + 1) * pw), y = Math.round(sy0 + x * slope) + thick + 2 + Math.round(hash(i, seed) * 5); p.fillRect(x, y, 3, 1); p.fillRect(x + 1, y + 1, 2, 1); }
+    mineTimbers(p, pw, ph, floorY);
+    if (seed % 2) { const lx = Math.round(pw * (seed === 1 ? 0.3 : 0.62)); p.fillStyle = "#3a2c1c"; for (let k = 0; k < 26; k++) p.fillRect(lx + Math.round(k * 0.45), Math.round(ph * 0.14) + k, 5, 2); p.fillStyle = "#584428"; for (let k = 0; k < 26; k += 5) p.fillRect(lx + Math.round(k * 0.45), Math.round(ph * 0.14) + k, 5, 1); } // a leaning prop, half given way
     const fxs = [[0.06, 0.84, 0.45], [0.06, 0.5, 0.9], [0.2, 0.7, 0], [0.1, 0.55, 0.88]][seed % 4];
     for (const fx of fxs) if (fx > 0) darkArch(p, Math.round(pw * fx - pw * 0.035), floorY - Math.round(ph * 0.2), Math.round(pw * 0.07), Math.round(ph * 0.2), rim);
     void t;
@@ -2212,6 +2455,22 @@ function forestDimPixel(seed: number) {
   return (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const horizon = forestBackdrop(p, pw, ph, t, "none");
     for (let i = 0; i < 7; i++) pixelTree(p, pw * (0.04 + i * 0.07 + hash(seed, i) * 0.03), horizon + 6, ph * (0.34 + hash(seed + 1, i) * 0.1), pw * 0.055, t, true);
+    if (seed === 2) { // a mossy split boulder marks this stretch of forest
+      const bx = Math.round(pw * 0.6), by = ph - Math.round(ph * 0.1);
+      for (let yy = 0; yy < 13; yy++) { const wd = Math.round(14 * Math.sqrt(1 - (yy / 13) * (yy / 13))) + Math.round((hash(seed, yy) - 0.5) * 3); for (let x = bx - wd; x <= bx + wd; x++) { const k = hash(x >> 1, yy >> 1); p.fillStyle = k > 0.72 ? "#2e3830" : k < 0.2 ? "#0c100d" : "#1d2620"; p.fillRect(x, by - yy, 1, 1); } }
+      p.fillStyle = "#060a07"; for (let yy = 0; yy < 11; yy++) p.fillRect(bx + 1 + ((yy >> 2) % 2), by - yy - 1, 1, 1); // the split down its face
+      p.fillStyle = "#39543c"; for (let i = 0; i < 9; i++) p.fillRect(bx - 12 + Math.round(hash(i, 7) * 22), by - 11 + Math.round(hash(i, 8) * 4), 2, 1); // moon-caught moss cap
+    } else { // a great fallen trunk rots across this one
+      const ly = ph - Math.round(ph * 0.08);
+      for (let x = Math.round(pw * 0.3); x < pw * 0.94; x++) {
+        const yc = ly - Math.round(Math.sin((x - pw * 0.3) * 0.012) * 5);
+        p.fillStyle = "#04070a"; p.fillRect(x, yc + 4, 1, 3); // ground shadow
+        const k = hash(x >> 2, 3); p.fillStyle = k > 0.6 ? "#1a1512" : "#120e0b"; p.fillRect(x, yc, 1, 5); // bark
+        p.fillStyle = "#25301f"; if (hash(x >> 1, 5) > 0.6) p.fillRect(x, yc - 1, 1, 1); // moss along its top
+      }
+      p.fillStyle = "#2a221a"; for (let r = 0; r < 4; r++) p.fillRect(Math.round(pw * 0.3) - 2, ly - 4 + r * 3, 2, 2); // the torn root end
+      p.fillStyle = "#0d1410"; for (const bx2 of [0.45, 0.62, 0.8]) p.fillRect(Math.round(pw * bx2), ly - 6, 2, 6); // snapped branch stubs
+    }
     pixelTree(p, pw * (0.1 + hash(seed, 9) * 0.05), ph + 6, ph * 0.92, pw * 0.1, t, false);
     pixelTree(p, pw * (0.86 - hash(seed, 8) * 0.05), ph + 10, ph * 1.0, pw * 0.11, t, false);
   });
@@ -2555,30 +2814,102 @@ function mirrorRoomPixel(lit: boolean, roomId: string) {
 }
 function smallCavePixel(forbidding: boolean) {
   return (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => pixelStage(ctx, w, h, 256, (p, pw, ph) => {
-    const pal = litCave("dungeon", "", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
+    const pal = litCave("dungeon", "", pw, ph, forbidding ? 0.6 : 0.82);
+    if (forbidding) { pal.wallTop = [38, 40, 52]; pal.wallBot = [16, 17, 24]; pal.floorTop = [32, 34, 44]; pal.floorBot = [12, 13, 18]; } // a cold, unfriendly blue
+    const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
+    // a SMALL cave: the ceiling presses down — a deep stalactite fringe
+    p.fillStyle = forbidding ? "#05060a" : "#0a0806";
+    for (let x = 0; x < pw; x++) { const cy2 = Math.round(ph * 0.2 + Math.abs(Math.sin(x * 0.09) + Math.sin(x * 0.031)) * ph * 0.06 + (hash(x >> 3, 3) - 0.5) * 6); p.fillRect(x, 0, 1, cy2); }
+    for (let i = 0; i < 5; i++) { const sx2 = Math.round((0.12 + hash(i, 21) * 0.76) * pw), len = 6 + Math.round(hash(i, 22) * 8); for (let yy = 0; yy < len; yy++) { const wd2 = Math.max(1, Math.round((1 - yy / len) * 3)); p.fillRect(sx2 - wd2, Math.round(ph * 0.22) + yy, wd2 * 2, 1); } }
+    // scattered rubble on the floor
+    p.fillStyle = forbidding ? "#232633" : "#3a332a"; for (let i = 0; i < 7; i++) p.fillRect(Math.round(hash(i, 31) * pw), floorY + 4 + Math.round(hash(i, 32) * (ph - floorY - 8)), 2, 1);
     arches(p, pw, ph, floorY, rim, ["NORTH", "WEST"]);
-    const sx = Math.round(pw * 0.5); p.fillStyle = forbidding ? "#020203" : "#1a1814"; for (let s = 0; s < 5; s++) p.fillRect(sx - 12 + s * 2, ph - Math.round(ph * 0.04) - s * Math.round(ph * 0.035), 24 - s * 4, Math.round(ph * 0.035)); // staircase down
-    void t;
+    stairsDown(p, Math.round(pw * 0.5) - 12, ph - Math.round(ph * 0.16), 24, Math.round(ph * 0.16), forbidding ? "#2a2e3e" : rim); // the stairwell descending out of the room
   });
 }
 function coldPassagePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
-    const lay = builtRoom(p, pw, ph, t, "stone", 0.66, [180, 195, 220]); exitsBox(p, pw, ph, lay, ["WEST", "SOUTH"]);
-    p.fillStyle = "rgba(190,215,238,0.14)"; for (let i = 0; i < 36; i++) p.fillRect(Math.floor(hash(i, 1) * pw), Math.floor(hash(i, 2) * lay.by1), 1, 1); // frost glinting on cold damp stone
-    for (let i = 0; i < 4; i++) { const x = ((t * 10 + i * 60) % pw); p.fillStyle = "rgba(200,220,240,0.07)"; p.fillRect(Math.round(x), lay.by0, 2, ph - lay.by0); } // cold draft
+    const lay = builtRoom(p, pw, ph, t, "stone", 0.6, [172, 190, 222]); exitsBox(p, pw, ph, lay, ["WEST", "SOUTH"]);
+    // rime clinging along the mortar courses — frost in CLUSTERS, not sprinkles
+    p.fillStyle = "#b8ccdf";
+    for (let i = 0; i < 16; i++) {
+      const fx = Math.round(hash(i, 1) * (pw - 20)) + 8, fy = lay.by0 + 4 + (Math.round(hash(i, 2) * ((lay.by1 - lay.by0) / 5)) * 5);
+      const len = 3 + Math.round(hash(i, 3) * 6);
+      for (let k = 0; k < len; k++) if (hash(fx + k, fy) > 0.3) p.fillRect(fx + k, fy, 1, 1);
+    }
+    // icicles hanging from the ceiling line
+    for (let i = 0; i < 6; i++) {
+      const ix = Math.round(pw * (0.2 + hash(i, 7) * 0.6)), len = 4 + Math.round(hash(i, 8) * 7);
+      for (let yy = 0; yy < len; yy++) { const wd2 = Math.max(1, Math.round((1 - yy / len) * 2)); p.fillStyle = yy === 0 ? "#dcebf8" : "#a8c4dc"; p.fillRect(ix - (wd2 >> 1), lay.by0 - 2 + yy, wd2, 1); }
+      if (Math.sin(t * 1.4 + i * 2) > 0.85) { p.fillStyle = "#e8f4fc"; p.fillRect(ix, lay.by0 - 2 + len + Math.round(((t * 20) % 8)), 1, 2); } // a melt-drop lets go
+    }
+    // your breath drifts as a pale band
+    p.fillStyle = "rgba(200,220,240,0.10)";
+    for (let x = 0; x < pw; x += 2) { const my = Math.round(ph * 0.55 + Math.sin(x * 0.08 + t * 1.2) * 3); p.fillRect(x, my, 2, 2); }
   });
 }
 function narrowPassagePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  pixelStage(ctx, w, h, 256, (p, pw, ph) => { const lay = builtRoom(p, pw, ph, t, "stone"); exitsBox(p, pw, ph, lay, ["NORTH", "SOUTH"]); void t; });
+  pixelStage(ctx, w, h, 256, (p, pw, ph) => {
+    const lay = builtRoom(p, pw, ph, t, "stone");
+    // the rock CROWDS in from both sides — barely room to squeeze through
+    const rock = (side: 1 | -1, seed: number) => {
+      for (let y = 0; y < ph; y++) {
+        const wd2 = Math.round(pw * 0.3 + Math.sin(y * 0.05 + seed) * 8 + (hash(seed, y >> 2) - 0.5) * 10);
+        const x0 = side === 1 ? 0 : pw - wd2;
+        for (let x = x0; x < x0 + wd2; x++) { const k = hash(x >> 2, y >> 2); p.fillStyle = k > 0.78 ? "#3e3e4a" : k > 0.3 ? "#2e2e38" : "#22222a"; p.fillRect(x, y, 1, 1); }
+        p.fillStyle = "#565664"; p.fillRect(side === 1 ? wd2 - 1 : pw - wd2, y, 1, 1);
+      }
+    };
+    rock(1, 3); rock(-1, 7);
+    // the slot continues north — a tall thin gap between the crowding walls
+    const cx = pw >> 1;
+    p.fillStyle = "#08080b"; p.fillRect(cx - 6, lay.by0 + 6, 12, lay.by1 - lay.by0 - 4);
+    p.fillStyle = "#15151b"; p.fillRect(cx - 4, lay.by0 + 8, 8, lay.by1 - lay.by0 - 8);
+    p.fillStyle = "#55515e"; p.fillRect(cx - 7, lay.by0 + 5, 1, lay.by1 - lay.by0 - 3); p.fillRect(cx + 6, lay.by0 + 5, 1, lay.by1 - lay.by0 - 3);
+    void t;
+  });
 }
 function windingPassagePixel(seed: number) {
-  return (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => pixelStage(ctx, w, h, 256, (p, pw, ph) => { const lay = builtRoom(p, pw, ph, t, "stone"); exitsBox(p, pw, ph, lay, ["NORTH", "EAST"]); void seed; void t; });
+  return (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => pixelStage(ctx, w, h, 256, (p, pw, ph) => {
+    const pal = lampPal("dungeon", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t);
+    // the tunnel visibly WINDS: nested arches telescoping into the dark, each
+    // slipping a little further to one side — a curve you can read
+    const dirSign = seed % 2 ? 1 : -1;
+    const cols = ["#23262d", "#15181d", "#0b0d11", "#040506"];
+    const cx0 = Math.round(pw * 0.5);
+    let ax = cx0, aw = Math.round(pw * 0.09), ah = Math.round(ph * 0.34), ay = floorY;
+    p.fillStyle = `rgb(${pal.wallHi.join(",")})`; p.fillRect(ax - aw - 2, ay - Math.round(ah * 0.6), 2, Math.round(ah * 0.6)); p.fillRect(ax + aw, ay - Math.round(ah * 0.6), 2, Math.round(ah * 0.6)); // the near mouth's lit jambs
+    for (let i = 0; i < 4; i++) {
+      p.fillStyle = cols[i];
+      for (let yy = 0; yy < ah; yy++) { const rr = ah * 0.55; const wd2 = yy < rr ? Math.round(aw * Math.sqrt(Math.max(0, 1 - ((rr - yy) / rr) ** 2))) : aw; p.fillRect(ax - wd2, ay - ah + yy, wd2 * 2, 1); }
+      ax += dirSign * Math.round(aw * (i % 2 ? -0.5 : 0.9)); // the swing: right, back, right…
+      aw = Math.round(aw * 0.62); ah = Math.round(ah * 0.68); ay -= 2;
+    }
+    // the worn floor-path snaking into the mouth
+    p.fillStyle = "#3b3428";
+    for (let y = floorY; y < ph; y++) { const f = (y - floorY) / Math.max(1, ph - floorY); const cxp = cx0 + Math.sin(f * 2.2 + seed) * pw * 0.05 * dirSign; const half = 2 + f * 7; for (let x = Math.round(cxp - half); x <= cxp + half; x++) if (hash(x, y) > 0.4) p.fillRect(x, y, 1, 1); }
+  });
 }
 function ewPassagePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  pixelStage(ctx, w, h, 256, (p, pw, ph) => { const lay = builtRoom(p, pw, ph, t, "stone"); exitsBox(p, pw, ph, lay, ["EAST", "WEST"]); exitsBox(p, pw, ph, lay, ["DOWN"]); void t; });
+  pixelStage(ctx, w, h, 256, (p, pw, ph) => {
+    const lay = builtRoom(p, pw, ph, t, "stone"); exitsBox(p, pw, ph, lay, ["EAST", "WEST"]);
+    // the narrow stairway at the NORTH end, cut down through the floor of the passage
+    const cx = pw >> 1, swd = 22, sy0 = lay.by1 - 2;
+    p.fillStyle = "#0c0a08"; p.fillRect(cx - (swd >> 1) - 2, sy0 - 14, swd + 4, 16); // the stair mouth in the back wall
+    for (let s = 0; s < 5; s++) { const v = 30 - s * 6; p.fillStyle = `rgb(${v},${Math.round(v * 0.9)},${Math.round(v * 0.75)})`; p.fillRect(cx - (swd >> 1) + s, sy0 - 2 - s * 3, swd - s * 2, 3); }
+    p.fillStyle = "#565064"; p.fillRect(cx - (swd >> 1) - 3, sy0 - 15, 1, 16); p.fillRect(cx + (swd >> 1) + 2, sy0 - 15, 1, 16); // worn jambs
+    void t;
+  });
 }
 function nsPassagePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  pixelStage(ctx, w, h, 256, (p, pw, ph) => { const lay = builtRoom(p, pw, ph, t, "stone"); exitsBox(p, pw, ph, lay, ["NORTH", "NE", "SOUTH"]); void t; });
+  pixelStage(ctx, w, h, 256, (p, pw, ph) => {
+    const lay = builtRoom(p, pw, ph, t, "stone"); exitsBox(p, pw, ph, lay, ["NORTH", "NE", "SOUTH"]);
+    // a HIGH passage: the walls run up out of sight — tall shadow streaks above
+    p.fillStyle = "#0b0b0f"; p.fillRect(0, 0, pw, lay.by0 - 2);
+    for (let x = 4; x < pw; x += 9) { const hgt2 = Math.round(lay.by0 * (0.4 + hash(x, 9) * 0.6)); p.fillStyle = "#17171d"; p.fillRect(x, lay.by0 - hgt2, 2, hgt2); } // ribs of rock vanishing upward
+    p.fillStyle = "#26262e"; for (let x = 0; x < pw; x += 2) if (hash(x, 5) > 0.5) p.fillRect(x, lay.by0 - 2, 2, 2); // broken upper edge
+    void t;
+  });
 }
 function maintenanceRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
@@ -2593,8 +2924,20 @@ function squeekyRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = litCave("dungeon", "", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
     arches(p, pw, ph, floorY, rim, ["NORTH", "EAST"]);
-    p.fillStyle = "rgba(200,200,160,0.5)"; for (let i = 0; i < 6; i++) { const a = 0.4 + 0.3 * Math.abs(Math.sin(t * 6 + i)); p.globalAlpha = a; p.fillRect(Math.round(pw * 0.5) + Math.round(Math.sin(t * 4 + i) * 10), Math.round(ph * 0.16) + i * 3, 2, 1); } p.globalAlpha = 1; // squeaks drifting from the north passage
-    void t;
+    // the squeakers themselves: mice darting near the north passage
+    const mouse = (seed: number) => {
+      const cyc = (t * 0.9 + seed * 2.7) % 6;
+      const running = cyc < 1.6;
+      const mx = Math.round(pw * 0.5 + (running ? (cyc / 1.6 - 0.5) * 46 : (hash(seed, Math.floor((t * 0.9 + seed * 2.7) / 6)) - 0.5) * 40));
+      const my = floorY + 6 + Math.round(hash(seed, 4) * 8);
+      p.fillStyle = "#2a2622"; p.fillRect(mx, my, 3, 2); p.fillRect(mx + 3, my, 1, 1); // body + nose
+      p.fillStyle = "#1c1916"; for (let k = 1; k <= 3; k++) p.fillRect(mx - k, my + (k > 1 ? 1 : 0), 1, 1); // tail
+      if (!running && Math.sin(t * 3 + seed) > 0.6) { p.fillStyle = "#c8c49a"; p.fillRect(mx + 4, my - 3, 1, 1); p.fillRect(mx + 6, my - 5, 1, 1); } // a squeak!
+    };
+    mouse(1); mouse(5);
+    p.fillStyle = "#2e2a24"; for (let i = 0; i < 8; i++) p.fillRect(Math.round(pw * (0.38 + hash(i, 11) * 0.24)), floorY + 3 + Math.round(hash(i, 12) * 10), 1, 1); // droppings by the passage mouth
+    // squeaks drifting from the north passage
+    p.fillStyle = "rgba(200,200,160,0.5)"; for (let i = 0; i < 5; i++) { const a = 0.35 + 0.3 * Math.abs(Math.sin(t * 6 + i)); p.globalAlpha = a; p.fillRect(Math.round(pw * 0.5) + Math.round(Math.sin(t * 4 + i) * 10), Math.round(ph * 0.16) + i * 3, 2, 1); } p.globalAlpha = 1;
   });
 }
 function batRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -2612,30 +2955,59 @@ function batRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
 function smellyRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = litCave("dungeon", "", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
-    const sx = Math.round(pw * 0.3); p.fillStyle = "#040405"; p.fillRect(sx - 10, ph - Math.round(ph * 0.16), 20, Math.round(ph * 0.16)); p.fillStyle = "#1a1814"; for (let s = 0; s < 4; s++) p.fillRect(sx - 9, ph - Math.round(ph * 0.16) + s * Math.round(ph * 0.04), 18 - s * 3, 2); // descending staircase
-    for (let i = 0; i < 5; i++) { const yy = ph - Math.round(ph * 0.16) - i * 6 + Math.round(Math.sin(t * 2 + i) * 3); ditherGlow(p, sx, yy, 12, 7, "#7a9a3a", 0.22); } // foul odor wafting up (greenish)
+    const sx = Math.round(pw * 0.3); stairsDown(p, sx - 11, ph - Math.round(ph * 0.16), 22, Math.round(ph * 0.16), rim); // the stairwell the smell crawls out of
+    // the SMELL: sinuous ribbons of coal-gas crawling up from the stairwell below
+    for (let r = 0; r < 4; r++) {
+      const bx = sx - 8 + r * 5;
+      for (let k = 0; k < 34; k++) {
+        const yy = ph - Math.round(ph * 0.15) - k;
+        const xx = bx + Math.round(Math.sin(k * 0.3 + t * 1.6 + r * 2) * (2 + k * 0.12));
+        const a = Math.max(0, 0.5 - k * 0.014);
+        if (a > 0.06 && hash(xx, yy + Math.floor(t * 3)) > 0.35) { p.globalAlpha = a; p.fillStyle = r % 2 ? "#7a9a3a" : "#5c7a2c"; p.fillRect(xx, yy, 2, 1); }
+      }
+    }
+    p.globalAlpha = 1;
+    ditherGlow(p, sx, ph - Math.round(ph * 0.2), 16, 9, "#66802e", 0.2); // a sickly pall hangs over the stairs
     arches(p, pw, ph, floorY, rim, ["SOUTH"]);
-    void t;
   });
 }
 // -- river (underground stream / reservoir shores) --
 function reservoirShorePixel(north: boolean) {
   return (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => pixelStage(ctx, w, h, 256, (p, pw, ph) => {
-    const pal = pickPal("dungeon", "water"); pal.light = { x: pw * 0.5, y: ph * 0.2, rx: pw * 0.9, ry: ph, col: [150, 170, 200], peak: 0.42 };
+    const pal = pickPal("dungeon", "water"); pal.light = { x: pw * 0.5, y: ph * 0.96, rx: pw * 0.8, ry: ph, col: [222, 168, 92], peak: 0.6 };
     caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
-    const top = Math.round(ph * (north ? 0.5 : 0.44));
-    p.fillStyle = "#23272e"; p.fillRect(0, top - 2, pw, 3);
-    arches(p, pw, ph, top, rim, north ? ["NORTH"] : ["EAST", "WEST", "NORTH"]);
-    waterFill(p, pw, top, ph, t, "#3a6c8e", "#23506e");
-    if (north) { const ax = Math.round(pw * 0.5), ay = top + Math.round((ph - top) * 0.5); p.fillStyle = "#3a3a42"; p.fillRect(ax - 6, ay - 4, 12, 8); p.fillStyle = "#5a5a64"; p.fillRect(ax - 6, ay - 4, 12, 1); p.fillStyle = "#6a6a72"; p.fillRect(ax + 6, ay - 2, 4, 2); } // hand-held air pump
+    // the water fills the MIDDLE distance only — you stand on a real shore
+    const wTop = Math.round(ph * 0.44), wBot = Math.round(ph * 0.72);
+    waterFill(p, pw, wTop, wBot, t, "#31607e", "#1e4460");
+    p.fillStyle = "#0e2334"; p.fillRect(0, wTop - 1, pw, 1); // far waterline against the rock
+    // your lamplit shore: wet rock shelving into the reservoir
+    for (let y = wBot; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const k = hash(x >> 1, y >> 1), f = (y - wBot) / Math.max(1, ph - wBot);
+      p.fillStyle = k > 0.78 ? (f < 0.3 ? "#4a4438" : "#3e382c") : k > 0.3 ? "#332e24" : "#26221a";
+      p.fillRect(x, y, 1, 1);
+    }
+    p.fillStyle = "#5c6f7e"; for (let x = 0; x < pw; x += 2) if (Math.sin(x * 0.2 + t * 2.4) > 0.4) p.fillRect(x, wBot + (x % 2), 2, 1); // the reservoir lapping the shore
+    arches(p, pw, ph, ph - 6, rim, north ? ["NORTH"] : ["EAST", "WEST"]);
+    if (north) { // the hand-held air pump, abandoned on the north shore
+      const ax = Math.round(pw * 0.62), ay = ph - Math.round((ph - wBot) * 0.5);
+      p.fillStyle = "#101216"; p.fillRect(ax - 7, ay - 6, 15, 9);
+      p.fillStyle = "#3a3a42"; p.fillRect(ax - 6, ay - 5, 12, 7); p.fillStyle = "#5a5a64"; p.fillRect(ax - 6, ay - 5, 12, 1); // the barrel
+      p.fillStyle = "#8a8a92"; p.fillRect(ax - 2, ay - 9, 2, 4); p.fillRect(ax - 5, ay - 10, 8, 2); // plunger handle
+      p.fillStyle = "#6a6a72"; p.fillRect(ax + 6, ay - 2, 5, 2); p.fillRect(ax + 10, ay - 3, 2, 2); // the hose
+    }
   });
 }
 function streamViewPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = pickPal("dungeon", "water"); pal.light = { x: pw * 0.5, y: ph * 0.98, rx: pw * 0.8, ry: ph, col: [200, 210, 230], peak: 0.5 };
     const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
-    waterFill(p, pw, floorY - Math.round(ph * 0.06), floorY + Math.round((ph - floorY) * 0.5), t, "#3a6c8e", "#244e6e"); // the stream flowing W→E
-    p.fillStyle = "#3a3026"; p.fillRect(0, floorY + Math.round((ph - floorY) * 0.5), pw, Math.round((ph - floorY) * 0.5)); // the path beside it
+    const sTop = floorY - Math.round(ph * 0.06), sBot = floorY + Math.round((ph - floorY) * 0.5);
+    waterFill(p, pw, sTop, sBot, t, "#3a6c8e", "#244e6e");
+    p.fillStyle = "#9cc2d8"; for (let x = 0; x < pw; x++) { const yy = sTop + 2 + Math.round(Math.sin(x * 0.12) * 2 + (sBot - sTop) * 0.4); if (Math.sin(x * 0.4 - t * 5) > 0.55) p.fillRect(x, yy, 2, 1); } // the current, sliding west→east
+    // the rocky bank you walk along
+    for (let y = sBot; y < ph; y++) for (let x = 0; x < pw; x++) { const k = hash(x >> 1, y >> 1); p.fillStyle = k > 0.78 ? "#453c2e" : k > 0.3 ? "#372f23" : "#282218"; p.fillRect(x, y, 1, 1); }
+    p.fillStyle = "#5a4e38"; for (let i = 0; i < 9; i++) { const bx3 = Math.round(hash(i, 5) * pw), by3 = sBot + 2 + Math.round(hash(i, 6) * (ph - sBot - 4)); p.fillRect(bx3, by3, 2 + (i % 2), 2); p.fillStyle = "#6f6046"; p.fillRect(bx3, by3, 2 + (i % 2), 1); p.fillStyle = "#5a4e38"; } // boulders
+    p.fillStyle = "#6a7f8e"; for (let x = 0; x < pw; x += 2) if (Math.sin(x * 0.3 + t * 3) > 0.5) p.fillRect(x, sBot, 2, 1); // water licking the bank
     arches(p, pw, ph, floorY, rim, ["EAST"]);
   });
 }
@@ -2652,8 +3024,22 @@ function inStreamPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: n
 function dampCavePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = litCave("dungeon", "damp", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
-    p.fillStyle = "rgba(120,170,200,0.18)"; for (let i = 0; i < 30; i++) { const x = Math.floor(hash(i, 1) * pw), y = Math.floor(hash(i, 2) * floorY); p.fillRect(x, y, 1, 1 + (i % 2)); } // damp seeps
-    for (let i = 0; i < 8; i++) { const x = Math.round(hash(i, 5) * pw), drip = (t * 30 + i * 40) % floorY; p.fillStyle = "#9ac0d4"; p.fillRect(x, Math.round(drip), 1, 2); } // dripping water
+    // wet sheen running down the walls in streaks (water follows the rock, not random)
+    for (let i = 0; i < 9; i++) {
+      const x = Math.round(pw * (0.1 + hash(i, 1) * 0.8)), y0 = Math.round(ph * (0.12 + hash(i, 2) * 0.2)), len = Math.round((floorY - y0) * (0.5 + hash(i, 3) * 0.5));
+      for (let k = 0; k < len; k++) { const xx = x + Math.round(Math.sin(k * 0.2 + i) * 1); if (hash(xx, k) > 0.3) { p.fillStyle = k % 3 ? "#3d4a54" : "#55707e"; p.fillRect(xx, y0 + k, 1, 1); } }
+    }
+    // moss creeping where the water runs
+    p.fillStyle = "#2c3e24"; for (let i = 0; i < 6; i++) { const mx = Math.round(pw * (0.14 + hash(i, 7) * 0.7)), my = floorY - 3 - Math.round(hash(i, 8) * 8); for (let k = 0; k < 4; k++) if (hash(mx + k, my) > 0.3) p.fillRect(mx + k, my + (k % 2), 2, 1); }
+    // drips falling from the ceiling to puddles that blink with each strike
+    for (let i = 0; i < 6; i++) {
+      const x = Math.round(pw * (0.15 + hash(i, 5) * 0.7)), cyc = (t * 0.9 + i * 0.7) % 1;
+      const py2 = floorY + 4 + Math.round(hash(i, 6) * ((ph - floorY) * 0.5));
+      p.fillStyle = "#1c2830"; p.fillRect(x - 3, py2, 7, 2); p.fillStyle = "#2c4250"; p.fillRect(x - 2, py2, 5, 1); // the puddle
+      const dy2 = Math.round(ph * 0.14 + cyc * (py2 - ph * 0.14));
+      p.fillStyle = "#9ac0d4"; p.fillRect(x, dy2, 1, 2); // the falling drop
+      if (cyc > 0.92) { p.fillStyle = "#c8e2ee"; p.fillRect(x - 2, py2, 1, 1); p.fillRect(x + 2, py2, 1, 1); } // splash rings
+    }
     p.fillStyle = "#040406"; p.fillRect(Math.round(pw * 0.46), floorY, Math.round(pw * 0.08), ph - floorY); // narrows to a crack (south)
     arches(p, pw, ph, floorY, rim, ["WEST", "EAST"]);
   });
@@ -2661,10 +3047,37 @@ function dampCavePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: n
 function deepCanyonPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = litCave("dungeon", "", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
-    p.fillStyle = "#040406"; p.fillRect(0, floorY - Math.round(ph * 0.04), pw, ph - floorY + Math.round(ph * 0.04)); // the deep canyon drop
-    ditherGlow(p, pw * 0.5, ph, pw * 0.6, ph * 0.12, "#3a6c8e", 0.25); // sound/sight of water far below
     arches(p, pw, ph, floorY, rim, ["NW", "EAST", "SW"]);
-    void t;
+    // you stand on the SOUTH RIM: the canyon falls away in shelves of rock,
+    // down and down to a thread of white water you can only hear
+    const rimY = floorY + 2;
+    p.fillStyle = "#4c4336"; p.fillRect(0, rimY - 1, pw, 1); // your lamplit lip
+    const bands: [number, string][] = [[0.12, "#211d18"], [0.3, "#161310"], [0.52, "#0d0b09"], [0.8, "#050505"]];
+    let yTop = rimY;
+    for (const [frac, col] of bands) {
+      const yBot = rimY + Math.round((ph - rimY) * frac);
+      for (let x = 0; x < pw; x++) { const wob = Math.round((hash(x >> 3, Math.round(yTop)) - 0.5) * 3); p.fillStyle = col; p.fillRect(x, yTop + wob, 1, yBot - yTop + 3); }
+      p.fillStyle = "#2e2921"; for (let x = 0; x < pw; x += 2) if (hash(x, yBot) > 0.55) p.fillRect(x, yBot + Math.round((hash(x >> 3, yBot) - 0.5) * 3), 2, 1); // each shelf's faint edge
+      yTop = yBot;
+    }
+    // the river, far below: a glinting thread through the black
+    const ry2 = ph - 4;
+    for (let x = 0; x < pw; x++) {
+      const yy = ry2 + Math.round(Math.sin(x * 0.05) * 1.5);
+      if (Math.sin(x * 0.3 + t * 3) > 0.2) { p.fillStyle = "#2c5878"; p.fillRect(x, yy, 1, 1); }
+      if (Math.sin(x * 0.5 - t * 4) > 0.82) { p.fillStyle = "#7fa8c4"; p.fillRect(x, yy, 1, 1); } // white-water sparks
+    }
+    // the way down: steps cut into the rock, zig-zagging along the near wall
+    let sx2 = Math.round(pw * 0.72), sy2 = rimY + 2, dir2 = -1;
+    p.fillStyle = "#3a332a";
+    for (let s = 0; s < 9; s++) {
+      const wd2 = Math.max(4, 10 - s);
+      p.fillStyle = `rgb(${58 - s * 5},${51 - s * 5},${42 - s * 4})`;
+      p.fillRect(sx2, sy2, wd2, 2);
+      sx2 += dir2 * (wd2 - 2); sy2 += 4 + (s >> 1);
+      if (s % 3 === 2) dir2 = -dir2;
+      if (sy2 > ph - 8) break;
+    }
   });
 }
 
@@ -2801,8 +3214,25 @@ function caveBackdrop(p: CanvasRenderingContext2D, pw: number, ph: number, pal: 
   for (let i = 0; i < 7; i++) { const sxp = Math.round(hash(i, 11) * pw), len = Math.round(ph * (0.06 + hash(i, 12) * 0.16)); for (let yy = 0; yy < len; yy++) { const wd = Math.max(1, Math.round((1 - yy / len) * 4)); p.fillRect(sxp - wd, 4 + yy, wd * 2 + 1, 1); } }
   // dark rock intruding from the sides — frames the view, makes it feel enclosed
   for (let y = 0; y < ph; y++) { const lw = Math.round(6 + Math.abs(Math.sin(y * 0.06)) * 12 + (hash(7, Math.floor(y / 5)) - 0.5) * 8); p.fillRect(0, y, Math.max(0, lw), 1); const rw = Math.round(6 + Math.abs(Math.sin(y * 0.05 + 1)) * 12 + (hash(8, Math.floor(y / 5)) - 0.5) * 8); p.fillRect(pw - Math.max(0, rw), y, Math.max(0, rw), 1); }
-  // stalagmites rising from the rocky floor
-  p.fillStyle = mixHex(pal.floorBot, -8); for (let i = 0; i < 4; i++) { const sxp = Math.round((0.15 + hash(i, 13) * 0.7) * pw), fe = floorEdge(sxp), h2 = Math.round(ph * (0.04 + hash(i, 14) * 0.07)); for (let yy = 0; yy < h2; yy++) { const wd = Math.max(1, Math.round((1 - yy / h2) * 4)); p.fillRect(sxp - wd, fe - yy, wd * 2 + 1, 1); } }
+  // stalagmites rising from the rocky floor — shaded columns, lamp-lit on the
+  // side facing pal.light, dark core away from it (not flat black bells)
+  const lampX = pal.light ? pal.light.x : pw * 0.5;
+  const smDark = mix(pal.floorBot, [0, 0, 0], 0.5), smMid = mix(pal.floorTop, pal.floorBot, 0.55), smLit = mix(pal.floorTop, pal.floorHi, 0.35);
+  for (let i = 0; i < 4; i++) {
+    const sxp = Math.round((0.15 + hash(i, 13) * 0.7) * pw), fe = floorEdge(sxp);
+    const h2 = Math.round(ph * (0.05 + hash(i, 14) * 0.09)), bw = 3 + Math.round(hash(i, 15) * 3);
+    const litLeft = sxp > lampX; // which flank catches the lamp
+    for (let yy = 0; yy < h2; yy++) {
+      const f = yy / h2, wd = Math.max(1, Math.round((1 - f * f) * bw + (hash(i, yy >> 2) - 0.5) * 1.2)); // convex taper, knobby edge
+      const y = fe - yy, x0 = sxp - wd, x1 = sxp + wd;
+      for (let x = x0; x <= x1; x++) {
+        const flank = litLeft ? (x1 - x) / (wd * 2 + 1) : (x - x0) / (wd * 2 + 1); // 0 = shadow side, 1 = lit side
+        const c = flank > 0.72 ? smLit : flank > 0.38 ? smMid : smDark;
+        p.fillStyle = `rgb(${qcol(c, dth(x, y)).join(",")})`; p.fillRect(x, y, 1, 1);
+      }
+    }
+    p.fillStyle = `rgb(${smDark.join(",")})`; p.fillRect(sxp - bw - 1, fe, bw * 2 + 3, 1); // rooted in its own floor shadow
+  }
   ambiance(p, pw, ph, t, pal.light);
   return floorY;
 }
