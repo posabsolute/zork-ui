@@ -1355,44 +1355,62 @@ function trollRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: 
   });
 }
 // A detailed, shaded troll: hunched green brute, heavy brow, fanged underbite,
-// big belly, muscular arms, the bloody axe. Drawn in a 64-tall design grid
-// (gx from centre, gy up from the feet) scaled to H, lit from the upper-left.
+// big belly, defined limbs, the bloody axe. Drawn in a 64-tall design grid
+// (gx from centre, gy up from the feet) scaled to H, lit from the upper-left,
+// sel-out shadow edges so the masses separate instead of merging into a blob.
 function trollSprite(p: CanvasRenderingContext2D, cx: number, floorY: number, H: number, t: number) {
   cx = Math.round(cx); const s = H / 64;
   const X = (gx: number) => Math.round(cx + gx * s), Y = (gy: number) => Math.round(floorY - gy * s);
   const disc = (gx: number, gy: number, gr: number, c: string) => { p.fillStyle = c; fillDisc(p, X(gx), Y(gy), Math.max(1, Math.round(gr * s))); };
   const rect = (gx: number, gy: number, gw: number, gh: number, c: string) => { p.fillStyle = c; p.fillRect(X(gx), Y(gy + gh), Math.max(1, Math.round(gw * s)), Math.max(1, Math.round(gh * s))); };
-  const c0 = "#26331a", c1 = "#384a22", c2 = "#4c6230", c3 = "#647c3e", belly = "#6a7e3c", cloth = "#5a3f22", clothd = "#3a281493", bone = "#e8dec2", blood = "#811414", steel = "#b2b8c2", steelD = "#787f88", wood = "#4a3526";
-  void t;
-  // feet + bone claws
-  rect(-14, 0, 9, 4, c0); rect(5, 0, 9, 4, c0); disc(-9, 3, 4, c1); disc(9, 3, 4, c1);
-  for (const fx of [-14, -11, -8]) rect(fx, 0, 2, 2, bone); for (const fx of [6, 9, 12]) rect(fx, 0, 2, 2, bone);
-  // short thick legs
-  rect(-12, 4, 8, 15, c1); rect(4, 4, 8, 15, c1); rect(9, 4, 3, 15, c0); rect(-12, 4, 2, 15, c0);
-  // hunched body — big belly + chest, lit on the left
-  disc(0, 27, 16, c2); disc(0, 41, 14, c2); disc(-3, 28, 11, belly); disc(8, 30, 9, c1);
-  disc(-13, 47, 8, c1); disc(13, 47, 8, c1); disc(0, 50, 9, c2); // raised shoulders
-  // loincloth
-  rect(-12, 15, 24, 10, cloth); for (let i = 0; i < 7; i++) rect(-12 + i * 3.4, 11, 2, 5, clothd);
-  // left arm hanging — bicep, forearm, fist
-  disc(-15, 44, 6, c1); rect(-20, 26, 8, 18, c1); rect(-20, 26, 3, 18, c0); disc(-16, 25, 5, c2);
-  // right arm hoisting the axe
-  disc(15, 47, 6, c1); rect(13, 36, 8, 13, c2); disc(18, 36, 5, c2);
-  // neck + big hunched head
-  rect(-5, 50, 10, 5, c1);
-  disc(0, 59, 12, c2); disc(-4, 61, 6, c3); // skull, lit brow
-  disc(-12, 58, 3, c1); disc(12, 58, 3, c1); // ears
-  rect(-10, 59, 20, 2, c0); // heavy brow ridge
-  rect(-7, 56, 4, 2, "#f4e63c"); rect(3, 56, 4, 2, "#f4e63c"); rect(-6, 56, 1, 2, "#c63418"); rect(5, 56, 1, 2, "#c63418"); // angry eyes
-  disc(0, 53, 3, c3); rect(-1, 51, 2, 2, c1); // bulbous nose
-  rect(-8, 48, 16, 4, c1); rect(-8, 48, 16, 1, c0); rect(-7, 50, 14, 1, "#160c08"); // jutting jaw + mouth
-  rect(-6, 49, 2, 3, bone); rect(4, 49, 2, 3, bone); rect(-1, 48, 2, 2, bone); // fangs (underbite)
-  // the bloody axe (handle up the right arm, blade at the top)
-  rect(20, 28, 2, 30, wood);
-  const bx = X(19), by = Y(56);
-  p.fillStyle = steel; p.beginPath(); p.moveTo(bx - 9 * s, by - 2 * s); p.lineTo(bx + 6 * s, by - 5 * s); p.lineTo(bx + 6 * s, by + 9 * s); p.lineTo(bx - 9 * s, by + 6 * s); p.closePath(); p.fill();
-  p.fillStyle = steelD; p.beginPath(); p.moveTo(bx - 9 * s, by + 2 * s); p.lineTo(bx + 6 * s, by + 4 * s); p.lineTo(bx + 6 * s, by + 9 * s); p.lineTo(bx - 9 * s, by + 6 * s); p.closePath(); p.fill();
-  p.fillStyle = blood; p.fillRect(Math.round(bx - 9 * s), Math.round(by - 2 * s), Math.round(14 * s), Math.max(1, Math.round(2 * s)));
+  const ink = "#121808", c0 = "#1e2a12", c1 = "#33471d", c2 = "#4a6428", c3 = "#617e34", hi = "#7a984b";
+  const cloth = "#5a3f22", clothd = "#3a2814", bone = "#e8dec2", blood = "#811414", steel = "#b2b8c2", steelD = "#787f88", steelHi = "#e6ecf2", wood = "#4a3526", woodHi = "#6a4f38";
+  const heave = Math.round(Math.abs(Math.sin(t * 1.4)) * s); // his chest heaves
+  // dithered ground shadow rooting him to the flags
+  for (let y = Y(0) - 1; y < Y(0) + Math.max(2, Math.round(3 * s)); y++) for (let x = X(-21); x < X(21); x++) { const ex = (x - X(0)) / (20 * s), ey = (y - Y(0)) / (2.6 * s); const dd = ex * ex + ey * ey; if (dd < 1 && (1 - dd) * 0.8 > dth(x, y)) { p.fillStyle = "#0a0d06"; p.fillRect(x, y, 1, 1); } }
+  // wide-stance legs — thick columns, dark outer edge, lit inner shin
+  rect(-15, 2, 10, 15, c1); rect(5, 2, 10, 15, c1);
+  rect(-15, 2, 3, 15, c0); rect(12, 2, 3, 15, c0);
+  rect(-8, 3, 2, 12, c2); rect(6, 3, 2, 12, c2);
+  // splayed feet + bone claws
+  rect(-18, 0, 13, 3, c0); rect(5, 0, 13, 3, c0);
+  for (const fx of [-18, -15, -12]) rect(fx, 0, 2, 2, bone); for (const fx of [7, 10, 13]) rect(fx, 0, 2, 2, bone);
+  // ragged loincloth
+  rect(-13, 13, 26, 9, cloth); rect(-13, 20, 26, 2, "#6e4e2a");
+  for (let i = 0; i < 6; i++) rect(-12 + i * 4.2, 10 + (i % 2) * 2, 2, 4, clothd); // torn fringe
+  // the gut — a great sagging belly, lit upper-left, falling into shadow right
+  disc(1, 29 + (heave ? 1 : 0), 15, c2);
+  disc(9, 28, 10, c1); disc(-4, 31, 10, c3); disc(-7, 34, 5, hi); // form shading
+  rect(-14, 22, 30, 1, ink); // sel-out under the overhang
+  disc(1, 24, 3, c1); rect(0, 23, 2, 2, c0); // navel
+  // chest + hunched shoulders
+  disc(0, 44 + heave, 12, c2); disc(-9, 47, 7, c1); disc(10, 47, 7, c1); disc(-4, 46, 6, c3);
+  // LEFT ARM — hangs to the knee: shoulder, long forearm, huge knuckled fist
+  disc(-15, 45, 6, c2); rect(-21, 26, 7, 17, c1); rect(-21, 26, 2, 17, c0); rect(-16, 28, 2, 14, c2);
+  disc(-18, 23, 6, c1); disc(-19, 24, 3, c2); // fist, lit knuckle
+  for (const k of [-22, -19, -16]) rect(k, 19, 2, 2, bone); // claws
+  // RIGHT ARM — raised, gripping the haft
+  disc(14, 46, 6, c2); rect(15, 47, 6, 7, c1); disc(19, 54, 5, c1); disc(18, 55, 2, c2); // fist on the haft
+  // bull neck + the great head, thrust forward
+  rect(-6, 50, 12, 4, c1);
+  disc(0, 59, 11, c2); disc(-4, 61, 6, c3); // skull, moon of a brow
+  disc(-13, 59, 3, c1); disc(13, 59, 3, c1); rect(-14, 60, 2, 3, c0); rect(13, 60, 2, 3, c0); // pointed ears
+  rect(-10, 59, 20, 2, ink); // the heavy brow ridge, a black shelf
+  rect(-8, 56, 4, 2, "#f4e63c"); rect(4, 56, 4, 2, "#f4e63c"); rect(-6, 56, 1, 2, ink); rect(6, 56, 1, 2, ink); // baleful eyes beneath it
+  disc(0, 54, 3, c3); rect(-1, 52, 3, 1, c1); // squashed nose
+  rect(-9, 47, 18, 5, c1); rect(-9, 47, 18, 1, c0); rect(-8, 49, 16, 2, "#160c08"); // jaw + open maw
+  rect(-7, 48, 2, 4, bone); rect(5, 48, 2, 4, bone); rect(-1, 48, 2, 3, bone); // underbite fangs
+  p.fillStyle = c0; for (const [wx, wy] of [[-7, 37], [5, 26], [9, 41], [-11, 30]] as const) p.fillRect(X(wx), Y(wy), Math.max(1, Math.round(s)), Math.max(1, Math.round(s))); // warts
+  // THE AXE — haft rising past his fist, a big pixel-stepped blade at the top
+  rect(19, 24, 3, 34, wood); rect(19, 24, 1, 34, woodHi);
+  rect(17, 51, 8, 2, "#2a1f16"); // grip wrap
+  for (let r = 0; r < 11; r++) { // convex cutting edge, stepped — no smooth polygon
+    const wRow = Math.round(5 + Math.sin((r / 10) * Math.PI) * 8);
+    rect(22, 52 + r, wRow, 1, r < 3 ? steelD : steel);
+    rect(22 + wRow - 1, 52 + r, 1, 1, steelHi); // gleam along the edge
+    if (r > 2 && r < 9 && hash(r, 5) > 0.45) rect(22 + wRow - 2, 52 + r, 1, 1, blood); // old blood at the edge
+  }
+  rect(21, 54, 2, 7, "#5a5f66"); // the dark socket at the haft
 }
 function roundRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
@@ -1453,15 +1471,36 @@ function cyclopsRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const lay = builtRoom(p, pw, ph, t, "stone"); const floorY = lay.by1; exitsBox(p, pw, ph, lay, ["UP", "NE"]);
     if (rf("CYCLOPS-ROOM", "cyclopsGone")) {
-      // the cyclops has fled, smashing a ragged hole through the east (back-right) wall
-      const hx = lay.bx1 - Math.round((lay.bx1 - lay.bx0) * 0.36), hy = lay.by0 + 4, hw = Math.round((lay.bx1 - lay.bx0) * 0.34), hh = lay.by1 - lay.by0 - 6;
-      p.fillStyle = "#040405"; for (let yy = 0; yy < hh; yy++) { const jag = Math.round((hash(yy, 3) - 0.5) * 6); p.fillRect(hx + jag, hy + yy, hw - jag, 1); }
-      p.fillStyle = "#5a5e66"; for (let yy = 0; yy < hh; yy += 2) { const jag = Math.round((hash(yy, 3) - 0.5) * 6); p.fillRect(hx + jag - 1, hy + yy, 1, 2); } // rubble edge
-      p.fillStyle = "#1a1a1f"; for (let i = 0; i < 6; i++) p.fillRect(hx - 6 + Math.floor(hash(i, 5) * 14), floorY + Math.floor(hash(i, 6) * 8), 2, 2); // fallen rubble
+      // the cyclops has fled, smashing a ragged hole clean through the east wall —
+      // torn edges, darkness deepening inside, rubble avalanched onto the floor
+      const hx0 = lay.bx1 - Math.round((lay.bx1 - lay.bx0) * 0.4), hw = Math.round((lay.bx1 - lay.bx0) * 0.34);
+      const hyTop = lay.by0 + 3, hyBot = lay.by1 + 4;
+      for (let y = hyTop; y < hyBot; y++) {
+        const jl = Math.round((hash(y >> 1, 3) - 0.5) * 8), jr = Math.round((hash(y >> 1, 7) - 0.5) * 8);
+        const x0 = hx0 + jl, x1 = hx0 + hw + jr;
+        for (let x = x0; x < x1; x++) {
+          const f = Math.min(x - x0, x1 - x) / Math.max(1, (x1 - x0) * 0.5); // 0 at the torn edge → 1 deep inside
+          const v = Math.max(2, Math.round(15 - f * 13));
+          p.fillStyle = `rgb(${v},${v},${v + 2})`; p.fillRect(x, y, 1, 1);
+        }
+        if ((y % 4) === 1) { p.fillStyle = "#787c88"; p.fillRect(x0 - 2, y, 3, 2); p.fillStyle = "#3c4048"; p.fillRect(x1 - 1, y, 2, 2); } // snapped brick ends at the torn edges
+      }
+      // cracks radiating into the wall that held — pixel walks
+      p.fillStyle = "#1c1c22";
+      for (const [sx0, sy0, ddx] of [[hx0 - 2, hyTop + 8, -1], [hx0 - 3, hyTop + 26, -1], [hx0 + hw + 2, hyTop + 16, 1]] as const) {
+        let xx = sx0; for (let k = 0; k < 14; k++) { xx += ddx * (hash(xx, k) > 0.3 ? 2 : 1); p.fillRect(xx, sy0 + Math.round((hash(k, xx) - 0.5) * 4), 2, 1); }
+      }
+      // the avalanche of broken masonry spilling out of the hole
+      for (let i = 0; i < 16; i++) {
+        const rx = hx0 - 4 + Math.round(hash(i, 11) * (hw + 10)), ry = lay.by1 + 1 + Math.round(hash(i, 12) * 9);
+        const bw2 = 2 + Math.round(hash(i, 13) * 3);
+        p.fillStyle = "#15151a"; p.fillRect(rx, ry + 1, bw2, 2); // shadow under each block
+        p.fillStyle = hash(i, 14) > 0.5 ? "#4a4e58" : "#3a3e46"; p.fillRect(rx, ry - 1, bw2, 2);
+        p.fillStyle = "#6a6e78"; p.fillRect(rx, ry - 1, bw2, 1); // lamplit top
+      }
     } else {
-      // the cyclops — a huge one-eyed giant looming over the room
-      const H = Math.round(ph * 0.56);
-      creature(p, pw * 0.5, floorY + Math.round((ph - floorY) * 0.45), H, Math.round(H * 0.5), "#4a3e2e", "#322a1e", "#ff8a4a", true, t);
+      // the cyclops — a huge one-eyed giant, hungry, blocking the stair
+      cyclopsSprite(p, pw * 0.5, floorY + Math.round((ph - floorY) * 0.55), Math.round(ph * 0.62), t);
     }
   });
 }
@@ -1537,12 +1576,21 @@ function egyptRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: 
     const lay = builtRoom(p, pw, ph, t, "temple", 0.7, [224, 188, 120]); const floorY = lay.by1; exitsBox(p, pw, ph, lay, ["WEST"]); // ascending stair west
     // hieroglyph bands across the tomb's back wall
     p.fillStyle = "#7a6a44"; for (let r = 0; r < 2; r++) { const yy = lay.by0 + 6 + r * Math.round((lay.by1 - lay.by0) * 0.35); for (let x = lay.bx0 + 4; x < lay.bx1 - 4; x += 7) { p.fillRect(x, yy, 1, 5); p.fillRect(x + 2, yy + 1, 3, 1); p.fillRect(x + 3, yy + 3, 1, 2); } }
-    // the solid-gold coffin (sarcophagus), the focal treasure
-    const cx = Math.round(pw * 0.54), cy = floorY + Math.round((ph - floorY) * 0.5), CL = 24; // sarcophagus centred; CL = head→foot length
-    ditherGlow(p, cx, cy, 28, 17, "#e8c24a", 0.4);
-    // a mummiform case: narrow head (top) & foot, widest at the shoulders
-    const halfW = (yy: number) => { const f = (yy + CL / 2) / CL; return Math.max(2, Math.round(11 * (0.5 + 0.5 * Math.sin(f * Math.PI)) * (f < 0.18 ? 0.72 : 1))); };
+    // the solid-gold coffin (sarcophagus), the focal treasure, upright on a plinth
+    const cx = Math.round(pw * 0.54), cy = floorY + Math.round((ph - floorY) * 0.48), CL = 26; // CL = head→foot length
+    p.fillStyle = "#141008"; p.fillRect(cx - 15, cy + CL / 2 + 3, 30, 2); // its shadow
+    p.fillStyle = "#6a604a"; p.fillRect(cx - 14, cy + CL / 2, 28, 3); p.fillStyle = "#847a62"; p.fillRect(cx - 14, cy + CL / 2, 28, 1); // stone plinth
+    // a TRUE mummiform case: rounded head cap, widest at the shoulders, tapering
+    // steadily to a narrow foot
+    const halfW = (yy: number) => {
+      const f = (yy + CL / 2) / CL; // 0 head → 1 foot
+      if (f < 0.12) return Math.round(6 + f * 30); // head cap rounding out
+      if (f < 0.3) return 11; // the shoulders
+      return Math.max(4, Math.round(11 - (f - 0.3) * 9)); // the long taper to the foot
+    };
     for (let yy = -CL / 2; yy <= CL / 2; yy++) { const hw = halfW(yy); p.fillStyle = "#c9a23a"; p.fillRect(cx - hw, cy + yy, hw * 2, 1); p.fillStyle = "#e8c860"; p.fillRect(cx - hw, cy + yy, 2, 1); p.fillStyle = "#8a6a20"; p.fillRect(cx + hw - 2, cy + yy, 2, 1); } // body + lit/shadowed edges
+    p.fillStyle = "#0e0a04"; for (let yy = -CL / 2; yy <= CL / 2; yy += 1) { const hw = halfW(yy); p.fillRect(cx + hw, cy + yy, 1, 1); } // sel-out down the shadow side
+    treasureGlint(p, cx - 8, cy - CL / 2 + 3, t, "#ffe9a0"); // the lamp catching the gold
     const headY = cy - CL / 2 + 4; // the mask end (head, top/back)
     if (rf("EGYPT-ROOM", "coffinOpen")) {
       p.fillStyle = "#241a06"; for (let yy = -CL / 2 + 3; yy <= CL / 2 - 3; yy++) { const hw = Math.max(1, halfW(yy) - 3); p.fillRect(cx - hw, cy + yy, hw * 2, 1); } // open — dark hollow
@@ -1649,8 +1697,22 @@ function loudRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: n
 function domeRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = lampPal("dungeon", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
-    p.strokeStyle = rim; p.lineWidth = 1; for (let k = 0; k < 3; k++) { p.beginPath(); p.ellipse(pw * 0.5, ph * 0.04, pw * (0.44 - k * 0.04), ph * (0.42 - k * 0.04), 0, 0.05, Math.PI - 0.05); p.stroke(); } // the dome
-    p.fillStyle = "#040406"; p.fillRect(0, floorY, pw, ph - floorY); // precipitous drop below
+    // the dome overhead: pixel-stepped masonry courses arcing across, never strokes
+    for (let k = 0; k < 3; k++) {
+      const rx = pw * (0.46 - k * 0.05), ry = ph * (0.44 - k * 0.05);
+      p.fillStyle = k === 0 ? rim : "#3a3a46";
+      for (let x = Math.round(pw * 0.5 - rx); x <= pw * 0.5 + rx; x++) {
+        const f = (x - pw * 0.5) / rx; const y = Math.round(ph * 0.03 + ry * (1 - Math.sqrt(Math.max(0, 1 - f * f))));
+        p.fillRect(x, y, 1, 1); if (hash(x >> 3, k) > 0.72) p.fillRect(x, y + 1, 1, 1); // course with mortar chunks
+      }
+    }
+    p.fillStyle = "#2c2c36"; for (let j = -3; j <= 3; j++) { const x = Math.round(pw * 0.5 + j * pw * 0.13); for (let y = Math.round(ph * 0.05 + Math.abs(j) * 3); y < Math.round(ph * 0.16 + Math.abs(j) * 2); y += 2) p.fillRect(x, y, 1, 1); } // radial ribs of the vault
+    // the precipitous drop below — the shaft wall sliding down out of the light
+    for (let y = floorY; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const f = (y - floorY) / (ph - floorY), k = hash(x >> 2, y >> 2);
+      const v = Math.max(2, Math.round((9 - f * 7) * (k > 0.7 ? 1.5 : 1)));
+      p.fillStyle = `rgb(${v},${v},${v + 2})`; p.fillRect(x, y, 1, 1);
+    }
     const ry = floorY; p.fillStyle = "#6a4f2c"; p.fillRect(0, ry - 7, pw, 3); p.fillStyle = "#4a371e"; for (let x = 3; x < pw; x += 13) p.fillRect(x, ry - 7, 2, 11); // wooden railing
     if (rf("DOME-ROOM", "ropeTied")) { // a rope tied to the railing, hanging down into the drop
       const rx2 = Math.round(pw * 0.5);
@@ -1667,7 +1729,8 @@ function domeRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: n
 function torchRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const lay = builtRoom(p, pw, ph, t, "temple", 0.6, [240, 180, 92]); const floorY = lay.by1; exitsBox(p, pw, ph, lay, ["DOWN", "SOUTH"]);
-    p.strokeStyle = "#3a3a46"; p.beginPath(); p.ellipse(pw * 0.5, lay.by0 - ph * 0.08, (lay.bx1 - lay.bx0) * 0.7, (lay.by1 - lay.by0) * 0.8, 0, 0.1, Math.PI - 0.1); p.stroke(); // the dome up above
+    p.fillStyle = "#3a3a46"; { const rx = (lay.bx1 - lay.bx0) * 0.7, ry = (lay.by1 - lay.by0) * 0.8, cy0 = lay.by0 - ph * 0.08; // the dome far above, a stepped arc
+      for (let x = Math.round(pw * 0.5 - rx); x <= pw * 0.5 + rx; x++) { const f = (x - pw * 0.5) / rx; const y = Math.round((cy0 + ry * (1 - Math.sqrt(Math.max(0, 1 - f * f)))) / 2) * 2; if (y > 0 && hash(x >> 2, 3) > 0.15) p.fillRect(x, y, 1, 1); } }
     const px = Math.round(pw * 0.5), py = floorY + Math.round((ph - floorY) * 0.3), pdh = Math.round((ph - floorY) * 0.5);
     // the white marble pedestal: plinth, fluted shaft, cap
     p.fillStyle = "#6a6252"; p.fillRect(px - 8, py + pdh - 3, 16, 3); p.fillStyle = "#8a8068"; p.fillRect(px - 8, py + pdh - 3, 16, 1); // plinth
@@ -1681,7 +1744,7 @@ function torchRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: 
     }
     if (!rf("TORCH-ROOM", "torchTaken")) {
       const fl = 0.8 + 0.2 * Math.abs(Math.sin(t * 7));
-      ditherGlow(p, px, py - 8, 14, 14, "#ffcf6a", 0.6 * fl); // firelight
+      ditherGlow(p, px, py - 8, 26, 22, "#ffcf6a", 0.17 * fl); // firelight, wide and soft
       p.fillStyle = "#d8ccb0"; p.fillRect(px - 1, py - 6, 3, 7); // the ivory torch handle
       p.fillStyle = "#8a5a2a"; p.fillRect(px - 2, py - 7, 5, 2); // its socket wrap
       p.fillStyle = "#ff9a3a"; p.fillRect(px - 2, py - 11, 5, 4); p.fillRect(px - 1, py - 13, 3, 2); // flame body
@@ -1718,33 +1781,67 @@ function northTemplePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t
 }
 function entranceToHadesPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
-    const pal = pickPal("hades", ""); pal.light = { x: pw * 0.5, y: ph * 0.6, rx: pw * 0.85, ry: ph, col: [190, 70, 44], peak: 0.5 };
+    const pal = pickPal("hades", ""); pal.light = { x: pw * 0.5, y: ph * 0.66, rx: pw * 0.5, ry: ph * 0.62, col: [170, 62, 36], peak: 0.34 };
     const floorY = caveBackdrop(p, pw, ph, pal, t);
-    const gx = Math.round(pw * 0.5), gw = Math.round(pw * 0.3), gtop = Math.round(ph * 0.18);
-    ditherGlow(p, gx, floorY, gw * 0.7, ph * 0.4, "#ff5a2a", 0.45); // hellfire beyond
-    p.fillStyle = "#160404"; p.fillRect(gx - gw / 2, gtop, gw, floorY - gtop); // dark gateway
-    p.fillStyle = "#3a2420"; p.fillRect(gx - gw / 2 - 4, gtop - 4, gw + 8, 4); p.fillRect(gx - gw / 2 - 4, gtop - 4, 4, floorY - gtop + 4); p.fillRect(gx + gw / 2, gtop - 4, 4, floorY - gtop + 4); // gate frame
-    p.fillStyle = "#caa24a"; for (let i = 0; i < 16; i++) p.fillRect(gx - gw / 2 + 2 + i * Math.round((gw - 4) / 16), gtop - 9, 2, 2); // inscription
+    const gx = Math.round(pw * 0.5), gw = Math.round(pw * 0.28), gtop = Math.round(ph * 0.14);
+    const x0 = gx - (gw >> 1), x1 = gx + (gw >> 1);
+    // THE GATE'S INTERIOR: hell beyond — a fire ramp climbing out of black,
+    // committed bands dithered at the seams, never a flat rectangle
+    const FIRE: number[][] = [[6, 2, 3], [42, 8, 6], [96, 22, 10], [164, 52, 18]];
+    for (let y = gtop; y < floorY; y++) for (let x = x0; x < x1; x++) {
+      const f = Math.pow((y - gtop) / (floorY - gtop), 1.5) * (FIRE.length - 1), b = Math.floor(f);
+      let c = FIRE[Math.min(FIRE.length - 1, b + ((f - b) * 1.8 - 0.4 > dth(x, y) ? 1 : 0))];
+      const side = Math.min(x - x0, x1 - x); if (side < 4) c = mix(c, [0, 0, 0], (4 - side) * 0.2); // walls of the passage recede
+      p.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; p.fillRect(x, y, 1, 1);
+    }
+    for (let x = x0 + 1; x < x1 - 1; x += 2) { // flame tongues licking up at the threshold
+      const fh = 3 + Math.round(Math.abs(Math.sin(x * 1.3 + t * 7)) * 6 + hash(x, Math.floor(t * 5)) * 3);
+      for (let k = 0; k < fh; k++) { p.fillStyle = k > fh - 3 ? "#ffc04a" : "#ff7a2a"; if (hash(x, k + Math.floor(t * 8)) > 0.3) p.fillRect(x, floorY - 2 - k, 1, 1); }
+    }
+    p.fillStyle = "#ff9a4a"; for (let i = 0; i < 5; i++) { const ex = x0 + 3 + Math.round(hash(i, 3) * (gw - 6)), ey = floorY - 6 - Math.round(((t * 9 + i * 17) % 26)); if (ey > gtop + 4 && hash(i, Math.floor(t * 3)) > 0.35) p.fillRect(ex, ey, 1, 1); } // embers drifting up
+    // carved basalt gateposts + lintel, their inner edges caught by the fire
+    for (const px2 of [x0 - 7, x1 + 1]) {
+      for (let y = gtop - 4; y < floorY; y++) { const k = hash(px2 + (y >> 2), 5); p.fillStyle = k > 0.7 ? "#2e1a1a" : "#241416"; p.fillRect(px2, y, 6, 1); if (y % 6 === 4) { p.fillStyle = "#170d0e"; p.fillRect(px2, y, 6, 1); } }
+      p.fillStyle = "#7a2a1c"; p.fillRect(px2 === x0 - 7 ? px2 + 5 : px2, gtop, 1, floorY - gtop); // fire-lit inner edge
+    }
+    p.fillStyle = "#241416"; p.fillRect(x0 - 9, gtop - 8, gw + 18, 5); p.fillStyle = "#38201f"; p.fillRect(x0 - 9, gtop - 8, gw + 18, 1); // the great lintel
+    p.fillStyle = "#caa24a"; for (let i = 0; i < 14; i++) if (hash(i, 9) > 0.2) p.fillRect(x0 - 4 + i * Math.round((gw + 8) / 14), gtop - 6, 2, 2); // the dread inscription
+    p.fillStyle = "#0c0605"; p.fillRect(x0 - 9, floorY, gw + 18, 2); // threshold shadow
     if (!rf("ENTRANCE-TO-HADES", "spiritsGone")) {
-      for (let i = 0; i < 3; i++) { // the evil spirits — wailing wisps, hooded heads trailing into tattered, dissolving shrouds
-        const fx = Math.round(gx - gw * 0.28 + i * gw * 0.28), fy = Math.round(floorY - 18 + Math.sin(t + i * 2) * 5);
-        p.globalAlpha = 0.42 + 0.2 * Math.sin(t * 2 + i);
-        ditherGlow(p, fx, fy - 4, 9, 13, "#7affb8", 0.4); // eerie aura
-        const bh = 22; for (let k = 0; k < bh; k++) { const f = k / bh, wob = Math.round(Math.sin(t * 2 + k * 0.5 + i) * f * 3);
-          if (f < 0.62) { const ww = Math.max(1, Math.round(5 - f * 1.5)); p.fillStyle = "#7df0b0"; p.fillRect(fx - ww + wob, fy - 10 + k, ww * 2, 1); } // shroud
-          else { p.fillStyle = "#5ad090"; for (const sx of [-3, 0, 3]) p.fillRect(fx + sx + wob, fy - 10 + k, 1, 1); } // dissolving tail
+      // the evil spirits — DARK cowled shapes barring the way, black against the
+      // fire, green grave-light in their hoods
+      for (let i = 0; i < 3; i++) {
+        const fx = Math.round(gx - gw * 0.3 + i * gw * 0.3), fy = Math.round(floorY - 2 + Math.sin(t * 1.2 + i * 2.1) * 2);
+        const hgt = 24 + (i === 1 ? 4 : 0);
+        for (let k = 0; k < hgt; k++) { // robe: widening downward, ragged hem
+          const f = k / hgt, ww = Math.max(2, Math.round(2 + f * 5));
+          const wob = Math.round(Math.sin(t * 2 + k * 0.4 + i * 3) * f * 2);
+          const y = fy - hgt + k;
+          if (k > hgt - 4 && hash(fx + k, i) > 0.55) continue; // hem dissolving to threads
+          p.fillStyle = k % 5 === 3 ? "#0a1410" : "#0d1a13"; p.fillRect(fx - ww + wob, y, ww * 2, 1);
         }
-        p.fillStyle = "#aaffce"; fillDisc(p, fx, fy - 9, 4); // hooded head
-        p.fillStyle = "#06200f"; p.fillRect(fx - 2, fy - 10, 1, 2); p.fillRect(fx + 1, fy - 10, 1, 2); p.fillRect(fx, fy - 6, 1, 2); // hollow eyes + wailing mouth
+        p.fillStyle = "#0d1a13"; fillDisc(p, fx, fy - hgt + 1, 4); // the cowl
+        p.fillStyle = "#050b07"; p.fillRect(fx - 2, fy - hgt, 5, 3); // its hollow
+        const gl = 0.55 + 0.45 * Math.sin(t * 3 + i * 2);
+        p.globalAlpha = Math.max(0.3, gl); p.fillStyle = "#7dffb0"; p.fillRect(fx - 2, fy - hgt + 1, 1, 1); p.fillRect(fx + 1, fy - hgt + 1, 1, 1); p.globalAlpha = 1; // grave-light eyes
+        p.fillStyle = "#0d1a13"; p.fillRect(fx - 7, fy - Math.round(hgt * 0.55), 3, 1); p.fillRect(fx + 5, fy - Math.round(hgt * 0.6), 3, 1); // reaching sleeve tips
       }
-      p.globalAlpha = 1;
-    } // exorcised → the gateway stands empty and quiet
+    } // exorcised → the gateway stands empty, the fire burning on alone
   });
 }
 function landOfLivingDeadPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const pal = pickPal("hades", ""); pal.light = { x: pw * 0.5, y: ph * 0.5, rx: pw * 0.8, ry: ph, col: [150, 90, 80], peak: 0.45 };
     const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
+    // tiers of burial niches cut into the rock — the land of the dead is a necropolis
+    for (let row = 0; row < 2; row++) for (let col = 0; col < 7; col++) {
+      if (hash(col, row * 5 + 2) < 0.2) continue; // some collapsed
+      const nx = Math.round(pw * (0.12 + col * 0.115)), ny = Math.round(ph * (0.2 + row * 0.16));
+      for (let d = 0; d < 3; d++) { const v = Math.max(2, 12 - d * 4); p.fillStyle = `rgb(${v + 3},${v + 1},${v})`; p.fillRect(nx + d, ny + d, 12 - d * 2, 9 - d * 2); } // recessed hollow
+      p.fillStyle = "#3a2c28"; p.fillRect(nx - 1, ny + 9, 14, 1); // its worn sill
+      if (hash(col * 3, row) > 0.55) { p.fillStyle = "#b8ad92"; p.fillRect(nx + 4, ny + 4, 4, 3); p.fillStyle = "#241a16"; p.fillRect(nx + 5, ny + 5, 1, 1); p.fillRect(nx + 7, ny + 5, 1, 1); } // a skull staring out
+      else if (hash(col * 7, row) > 0.6) { p.fillStyle = "#9a9078"; p.fillRect(nx + 3, ny + 6, 6, 1); p.fillRect(nx + 5, ny + 4, 1, 2); } // scattered long-bones
+    }
     // a heap of the dead's remains — crossed long-bones, a ribcage, a skull atop
     const bx = Math.round(pw * 0.2), by = floorY + Math.round((ph - floorY) * 0.46);
     p.fillStyle = "#c8c0a4"; for (let k = -8; k <= 8; k++) { p.fillRect(bx + k, by + Math.round(k * 0.4), 1, 2); p.fillRect(bx + k, by - Math.round(k * 0.4), 1, 2); } // two femurs crossed
@@ -1762,7 +1859,7 @@ function landOfLivingDeadPixel(ctx: CanvasRenderingContext2D, w: number, h: numb
     p.globalAlpha = 1;
     // the crystal skull — a real skull in ice-clear crystal, softly alight
     const sx = Math.round(pw * 0.58), sy = floorY + Math.round((ph - floorY) * 0.34);
-    ditherGlow(p, sx, sy - 1, 9, 7, "#7fe0ff", 0.4);
+    p.fillStyle = "#2a4a5a"; p.fillRect(sx - 5, sy + 4, 11, 1); // its cold light pooling beneath it
     p.fillStyle = "#d4eeff"; fillDisc(p, sx, sy - 2, 4); // cranium
     p.fillRect(sx - 3, sy + 1, 7, 2); p.fillRect(sx - 2, sy + 3, 5, 1); // cheeks + jaw
     p.fillStyle = "#2a4a5a"; p.fillRect(sx - 2, sy - 2, 2, 2); p.fillRect(sx + 1, sy - 2, 2, 2); p.fillRect(sx, sy + 1, 1, 1); // sockets + nasal
@@ -1775,8 +1872,15 @@ function atlantisRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, 
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
     const lay = builtRoom(p, pw, ph, t, "ancient", 0.55, [180, 210, 230]); const floorY = lay.by1; exitsBox(p, pw, ph, lay, ["UP", "SOUTH"]);
     p.fillStyle = "rgba(140,190,210,0.12)"; for (let i = 0; i < 7; i++) { const y = lay.by0 + Math.round((lay.by1 - lay.by0) * (0.1 + i * 0.12)); for (let x = lay.bx0; x < lay.bx1; x += 2) p.fillRect(x, y + Math.round(Math.sin(x * 0.1 + i + t * 0.5) * 2), 1, 1); } // water-caustic shimmer on the ancient back wall
-    const tx = Math.round(pw * 0.52), ty = floorY + Math.round((ph - floorY) * 0.34); ditherGlow(p, tx, ty - 6, 10, 14, "#7fe0ff", 0.5);
-    p.fillStyle = "#bfeaf5"; p.fillRect(tx - 1, ty - 16, 2, 18); p.fillRect(tx - 5, ty - 16, 2, 7); p.fillRect(tx + 3, ty - 16, 2, 7); p.fillRect(tx - 5, ty - 16, 12, 2); // crystal trident
+    const tx = Math.round(pw * 0.52), ty = floorY + Math.round((ph - floorY) * 0.34);
+    // the crystal trident, leaning against nothing on the ancient floor: shaft,
+    // crossbar, three barbed tines — glassy blues with a white spine
+    p.fillStyle = "#1a3644"; p.fillRect(tx - 6, ty + 3, 14, 1); // its cold gleam on the floor
+    p.fillStyle = "#8fd4ec"; p.fillRect(tx - 1, ty - 18, 3, 21); p.fillStyle = "#eaf8ff"; p.fillRect(tx, ty - 18, 1, 21); // shaft with bright spine
+    p.fillStyle = "#8fd4ec"; p.fillRect(tx - 6, ty - 15, 15, 2); // crossbar
+    for (const dx of [-6, 0, 6]) { p.fillStyle = "#8fd4ec"; p.fillRect(tx + dx, ty - 21, 2, 7); p.fillStyle = "#eaf8ff"; p.fillRect(tx + dx, ty - 21, 1, 2); p.fillStyle = "#5aa8c4"; p.fillRect(tx + dx + 1, ty - 16, 1, 2); } // three tines
+    p.fillStyle = "#eaf8ff"; p.fillRect(tx - 7, ty - 20, 1, 1); p.fillRect(tx + 7, ty - 20, 1, 1); // barb glints
+    treasureGlint(p, tx + 4, ty - 22, t, "#bfeaf5");
   });
 }
 function engravingsCavePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -2747,14 +2851,31 @@ function chasmPixel(eastEdge: boolean) {
     const nearLip = (x: number) => ph - Math.round((ph - floorY) * 0.26) + Math.round((hash(Math.floor(x / 4), 7) - 0.5) * 4) - tilt * Math.round((x / pw) * ph * 0.05);
     for (let x = 0; x < pw; x++) {
       const fl = farLip(x), nl = nearLip(x);
-      // the gulf: rock fading down 3 steps into true black — depth you can read
-      p.fillStyle = "#0e0c09"; p.fillRect(x, fl, 1, 2);
-      p.fillStyle = "#070605"; p.fillRect(x, fl + 2, 1, 3);
-      p.fillStyle = "#020203"; p.fillRect(x, fl + 5, 1, Math.max(0, nl - fl - 5)); // bottom cannot be seen
-      if (hash(x >> 2, 5) > 0.78) { p.fillStyle = "#12100c"; p.fillRect(x, fl + 4, 1, Math.round((nl - fl) * 0.25)); } // a few fissure striations
+      // the gulf: the far cliff face descending in fading striations, then true black
+      const cliffH = Math.round((nl - fl) * 0.62);
+      for (let y2 = fl; y2 < fl + cliffH; y2++) {
+        const f = (y2 - fl) / cliffH, k = hash(x >> 1, y2 >> 2);
+        const v = Math.max(2, Math.round((22 - f * 20) * (k > 0.6 ? 1.4 : k < 0.2 ? 0.6 : 1)));
+        p.fillStyle = `rgb(${v},${Math.max(0, v - 1)},${Math.max(0, v - 3)})`; p.fillRect(x, y2, 1, 1);
+      }
+      p.fillStyle = "#020203"; p.fillRect(x, fl + cliffH, 1, Math.max(0, nl - fl - cliffH)); // and below that, nothing at all
+      if (hash(x >> 3, 5) > 0.8) { p.fillStyle = "#0c0a08"; p.fillRect(x, fl + cliffH - 3, 1, 5); } // fissures swallowing the last light
       p.fillStyle = "#2c2720"; p.fillRect(x, fl - 2, 1, 3); p.fillStyle = "#453d30"; p.fillRect(x, fl - 2, 1, 1); // far lip, lamp-caught
       for (let y2 = nl - 2; y2 < ph; y2++) { const k = hash(x >> 1, y2 >> 1); p.fillStyle = k > 0.75 ? "#332e26" : k > 0.3 ? "#28241d" : "#1d1a15"; p.fillRect(x, y2, 1, 1); } // the near ledge, textured rock
       p.fillStyle = "#4c4336"; p.fillRect(x, nl - 2, 1, 1); // its lit lip
+      if (hash(x, 11) > 0.93) { p.fillStyle = "#3c352a"; p.fillRect(x, nl - 4, 2, 2); } // loose stones at the edge
+    }
+    // a spur of rock jutting out over the drop — scale for the void
+    { const sx0 = Math.round(pw * (eastEdge ? 0.22 : 0.66)), snl = nearLip(sx0);
+      for (let k = 0; k < 12; k++) { const wd2 = Math.round(6 * (1 - k / 12)) + 1; const y2 = snl - 3 - Math.round(k * 0.4); p.fillStyle = "#241f18"; p.fillRect(sx0 - wd2 + (eastEdge ? k : -k), y2, wd2 * 2, 2); }
+      p.fillStyle = "#3c352a"; p.fillRect(sx0 + (eastEdge ? 10 : -10), snl - 8, 2, 1); } // its lit tip
+    // cold air breathes up out of the dark — thin mist threads rising
+    for (let i = 0; i < 4; i++) {
+      const mx = Math.round(pw * (0.14 + i * 0.24)), base = nearLip(mx) - 4;
+      for (let k = 0; k < 16; k++) {
+        const yy = base - k, xx = mx + Math.round(Math.sin(yy * 0.2 + t * 0.7 + i * 2) * (1 + k * 0.18));
+        if ((0.4 - k * 0.02) > dth(xx, yy)) { p.fillStyle = "#1b1d20"; p.fillRect(xx, yy, 2, 1); }
+      }
     }
     // exits cut into the far wall / sides
     if (eastEdge) { darkArch(p, Math.round(pw * 0.46), floorY - Math.round(ph * 0.22), Math.round(pw * 0.08), Math.round(ph * 0.22), rim); darkArch(p, pw - Math.round(pw * 0.06), Math.round(ph * 0.5), Math.round(pw * 0.06), Math.round(ph * 0.16), rim); } // north passage + path east
@@ -2950,7 +3071,17 @@ function maintenanceRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: numbe
     const lay = builtRoom(p, pw, ph, t, "stone", 0.6, [170, 180, 195]); const floorY = lay.by1; exitsBox(p, pw, ph, lay, ["WEST", "SOUTH"]);
     const px = Math.round(pw * 0.5), py = Math.round((lay.by0 + lay.by1) / 2); p.fillStyle = "#2a2c32"; p.fillRect(px - 26, py - 10, 52, 22); // control panel on the back wall
     const bc = ["#3a6ad8", "#caa24a", "#8a5a2a", "#c83a2a"]; for (let i = 0; i < 4; i++) { p.fillStyle = bc[i]; p.fillRect(px - 20 + i * 12, py - 2, 7, 7); p.fillStyle = "#101216"; p.fillRect(px - 20 + i * 12, py - 2, 7, 1); } // blue/yellow/brown/red buttons
-    p.fillStyle = "#7a8a92"; p.fillRect(px + 14, floorY + Math.round((ph - floorY) * 0.4), 10, 2); p.fillStyle = "#6a5030"; p.fillRect(px - 24, floorY + Math.round((ph - floorY) * 0.5), 8, 2); // wrench + screwdriver (ransacked)
+    // the group of tool chests, ransacked and left open along the west wall
+    for (let c = 0; c < 3; c++) {
+      const cx2 = Math.round(pw * 0.16) + c * 17, cy2 = floorY + Math.round((ph - floorY) * (0.3 + c * 0.16)), cw2 = 14 - c;
+      p.fillStyle = "#111318"; p.fillRect(cx2 - 1, cy2 + 7, cw2 + 2, 2); // shadow
+      p.fillStyle = "#3a424c"; p.fillRect(cx2, cy2, cw2, 8); p.fillStyle = "#4c565f"; p.fillRect(cx2, cy2, cw2, 2); // chest, lit top rail
+      p.fillStyle = "#0c0e12"; p.fillRect(cx2 + 1, cy2 + 2, cw2 - 2, 3); // gaping open, emptied
+      p.fillStyle = "#5c666f"; p.fillRect(cx2 - 1, cy2 - 2, cw2 + 2, 2); p.fillStyle = "#252b32"; p.fillRect(cx2 + (cw2 >> 1) - 1, cy2 - 1, 2, 1); // lid thrown back + latch
+    }
+    p.fillStyle = "#7a8a92"; p.fillRect(px + 14, floorY + Math.round((ph - floorY) * 0.4), 10, 2); p.fillRect(px + 22, floorY + Math.round((ph - floorY) * 0.4) - 1, 2, 4); // wrench with jaw
+    p.fillStyle = "#6a5030"; p.fillRect(px - 24, floorY + Math.round((ph - floorY) * 0.55), 8, 2); p.fillStyle = "#9aa4ac"; p.fillRect(px - 16, floorY + Math.round((ph - floorY) * 0.55), 4, 1); // screwdriver, handle + shank
+    p.fillStyle = "#4a5a3a"; p.fillRect(px - 4, floorY + Math.round((ph - floorY) * 0.62), 7, 3); p.fillStyle = "#5c7048"; p.fillRect(px - 4, floorY + Math.round((ph - floorY) * 0.62), 7, 1); // the tube of viscous material
     void t;
   });
 }
@@ -2982,7 +3113,16 @@ function batRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
     p.fillRect(bx - 1, by, 3, 5); p.fillRect(bx - 1, by - 2, 1, 2); p.fillRect(bx + 1, by - 2, 1, 2); // body + ears
     for (let k = 0; k < 8; k++) { const wy2 = by + flap + Math.round(Math.abs(k - 3.5) * (flap > 0 ? 0.5 : -0.5)); p.fillRect(bx - 10 + k, wy2, 1, 2); p.fillRect(bx + 3 + k, wy2, 1, 2); } // membranous wings, angling with the beat
     p.fillStyle = "#4a2a34"; p.fillRect(bx, by + 1, 1, 1); // its mad little eye
-    treasureGlint(p, Math.round(pw * 0.5), floorY + Math.round((ph - floorY) * 0.4), t, "#6affa0"); // jade figurine
+    { // the exquisite jade figurine — a small seated idol, actually carved
+      const jx = Math.round(pw * 0.5), jy = floorY + Math.round((ph - floorY) * 0.4);
+      p.fillStyle = "#0e2a18"; p.fillRect(jx - 4, jy + 3, 9, 1); // its shadow
+      p.fillStyle = "#2e8a52"; p.fillRect(jx - 3, jy, 7, 3); // crossed-leg base
+      p.fillStyle = "#37a663"; p.fillRect(jx - 2, jy - 4, 5, 4); // body
+      p.fillStyle = "#2e8a52"; fillDisc(p, jx, jy - 6, 2); // head
+      p.fillStyle = "#4fd88a"; p.fillRect(jx - 2, jy - 4, 1, 4); p.fillRect(jx - 1, jy - 7, 1, 1); // lamplit jade edge
+      p.fillStyle = "#123a22"; p.fillRect(jx + 1, jy - 4, 1, 4); // shadow side
+      treasureGlint(p, jx + 3, jy - 7, t, "#6affa0");
+    }
     arches(p, pw, ph, floorY, rim, ["SOUTH", "EAST"]);
   });
 }
@@ -3398,7 +3538,7 @@ function stairsDown(p: CanvasRenderingContext2D, x: number, y: number, wd: numbe
 // from above (brightening as they climb).
 function stairsUp(p: CanvasRenderingContext2D, x: number, y: number, wd: number, hh: number, frame: string) {
   tunnel(p, x, y, wd, hh, frame); // the arched mouth it climbs into
-  ditherGlow(p, x + wd / 2, y + 2, wd * 0.6, hh * 0.5, "#9ab0c4", 0.3); // daylight/torchlight spilling from above
+  ditherGlow(p, x + wd / 2, y + 2, wd * 0.5, hh * 0.4, "#9ab0c4", 0.14); // a faint spill of light from above
   const n = 5, sh = hh / n;
   for (let i = 0; i < n; i++) { // i=0 nearest/bottom, i high = far/up
     const f = i / (n - 1), inset = Math.round(wd * 0.36 * f), sx = x + inset, sw = wd - inset * 2;
@@ -3421,9 +3561,12 @@ function drawExitsCave(p: CanvasRenderingContext2D, pw: number, ph: number, floo
 // ---- keyword-driven props ----
 const TREASURE = /gold|chalice|trident|scarab|bracelet|figurine|bar|skull|coin|jewel|pot|sceptre|scepter|emerald|diamond|torch|crown|jade|sapphire|crystal|chest|treasure|chalice|trunk|coffin|egg|scarab|bauble|canary/i;
 function treasureGlint(p: CanvasRenderingContext2D, x: number, y: number, t: number, col: string) {
-  ditherGlow(p, x, y, 7, 7, col, 0.5);
-  p.fillStyle = col; p.fillRect(x - 1, y - 1, 3, 3);
-  if (Math.sin(t * 3 + x) > 0.5) { p.fillStyle = "#fff"; p.fillRect(x, y - 1, 1, 1); }
+  // a classic 4-point star sparkle (no dotted glow box)
+  p.fillStyle = col; p.fillRect(x, y - 2, 1, 5); p.fillRect(x - 2, y, 5, 1);
+  const tw = Math.sin(t * 3 + x);
+  p.fillStyle = "#ffffff";
+  if (tw > 0.2) p.fillRect(x, y, 1, 1);
+  if (tw > 0.65) { p.fillRect(x + 3, y - 3, 1, 1); } // a stray twinkle wandering off the facet
 }
 // The THIEF — a seedy gentleman robber: a dark cloak, a feathered cap, a gaunt
 // moustachioed face with cold glinting eyes, a wicked stiletto, and a bulging
@@ -3480,6 +3623,56 @@ function figureProp(p: CanvasRenderingContext2D, x: number, baseY: number, hh: n
   p.fillStyle = body; p.fillRect(x - Math.round(hh * 0.18), baseY - hh, Math.round(hh * 0.36), hh); // torso
   p.fillStyle = body; fillDisc(p, x, baseY - hh - Math.round(hh * 0.12), Math.round(hh * 0.16)); // head
   p.fillStyle = eye; if (oneEye) p.fillRect(x - 1, baseY - hh - Math.round(hh * 0.13), 2, 2); else { p.fillRect(x - 3, baseY - hh - Math.round(hh * 0.13), 2, 1); p.fillRect(x + 2, baseY - hh - Math.round(hh * 0.13), 2, 1); }
+}
+// The cyclops: a mountain of ochre muscle on a 64-grid, one huge amber eye
+// under a single black brow, jaw open ("prepared to eat horses"), lit from
+// the lamp at lower-left with sel-out edges.
+function cyclopsSprite(p: CanvasRenderingContext2D, cx: number, floorY: number, H: number, t: number) {
+  cx = Math.round(cx); const s = H / 64;
+  const X = (gx: number) => Math.round(cx + gx * s), Y = (gy: number) => Math.round(floorY - gy * s);
+  const disc = (gx: number, gy: number, gr: number, c: string) => { p.fillStyle = c; fillDisc(p, X(gx), Y(gy), Math.max(1, Math.round(gr * s))); };
+  const rect = (gx: number, gy: number, gw: number, gh: number, c: string) => { p.fillStyle = c; p.fillRect(X(gx), Y(gy + gh), Math.max(1, Math.round(gw * s)), Math.max(1, Math.round(gh * s))); };
+  const ink = "#1c1206", d0 = "#3e2c18", d1 = "#5a4226", d2 = "#755733";
+  const fur = "#4a3418", furD = "#32220e", bone = "#e8dec2";
+  // ground shadow
+  for (let y = Y(0) - 1; y < Y(0) + Math.max(2, Math.round(3 * s)); y++) for (let x = X(-22); x < X(22); x++) { const ex = (x - X(0)) / (21 * s), ey = (y - Y(0)) / (2.6 * s); const dd = ex * ex + ey * ey; if (dd < 1 && (1 - dd) * 0.8 > dth(x, y)) { p.fillStyle = "#0c0a06"; p.fillRect(x, y, 1, 1); } }
+  // tree-trunk legs
+  rect(-16, 2, 12, 18, d1); rect(4, 2, 12, 18, d1);
+  rect(-16, 2, 3, 18, d0); rect(13, 2, 3, 18, d0);
+  rect(-8, 3, 2, 15, d2); rect(6, 3, 2, 15, d2); // lamplit shins
+  rect(-18, 0, 14, 3, d0); rect(4, 0, 14, 3, d0); // flat feet
+  for (const fx of [-17, -14, -11] as const) rect(fx, 0, 2, 1, bone); for (const fx of [6, 9, 12] as const) rect(fx, 0, 2, 1, bone); // toenails
+  // matted fur loincloth with a torn fringe
+  rect(-15, 16, 30, 9, fur); for (let i = 0; i < 7; i++) rect(-15 + i * 4.2, 13 + (i % 2), 2, 4, furD);
+  // the torso: a slab, tapering slightly to the hips, lit low-left
+  for (let gy = 25; gy < 47; gy++) { const f = (gy - 25) / 22, half = Math.round(15 + f * 3); rect(-half, gy, half * 2, 1, d1); rect(-half, gy, 5, 1, d2); rect(half - 4, gy, 4, 1, d0); }
+  rect(-10, 40, 8, 1, d2); rect(-9, 34, 7, 1, d2); rect(2, 38, 6, 1, d0); // pectoral / rib forms
+  disc(0, 26, 2, d0); // navel
+  rect(-16, 24, 33, 1, ink); // sel-out under the torso slab
+  // LEFT ARM hanging, knuckles by the knee
+  disc(-19, 45, 7, d1); rect(-25, 26, 8, 17, d1); rect(-25, 26, 2, 17, d0); rect(-19, 28, 2, 13, d2);
+  disc(-21, 22, 6, d1); disc(-22, 23, 3, d2); for (const k of [-25, -22, -19] as const) rect(k, 18, 2, 2, d0); // heavy fist
+  // RIGHT ARM half-raised, open grasping hand — he means to pick you up
+  disc(19, 45, 7, d1); rect(17, 34, 8, 11, d0);
+  disc(23, 31, 6, d1); for (let f2 = 0; f2 < 4; f2++) rect(20 + f2 * 3, 24 - (f2 % 2), 2, 5, d1); rect(20, 24, 2, 5, d2); // splayed fingers
+  // short bull neck, then the enormous head
+  rect(-7, 47, 14, 4, d0);
+  disc(0, 57, 12, d1); disc(-4, 55, 7, d2); // skull, lamplit cheek
+  rect(-12, 63, 24, 3, furD); for (let i = 0; i < 6; i++) rect(-12 + i * 4, 62, 2, 2, fur); // matted hair
+  disc(-13, 56, 3, d0); disc(13, 56, 3, d0); // ears
+  // THE EYE — one, huge, amber, dead centre
+  rect(-6, 55, 12, 5, "#ded8c8"); // sclera
+  const look = Math.round(Math.sin(t * 0.6) * 2); // it tracks you slowly
+  rect(-2 + look, 55, 5, 5, "#c87820"); rect(-1 + look, 56, 3, 3, "#140c06"); rect(-1 + look, 58, 1, 1, "#f4e8d0"); // iris, pupil, wet glint
+  rect(-8, 60, 16, 2, ink); // the single heavy brow, a black bar
+  if (Math.abs(Math.sin(t * 0.9)) > 0.97) rect(-6, 55, 12, 5, d1); // a slow blink
+  disc(0, 52, 3, d2); rect(-1, 50, 3, 1, d0); // broad nose
+  // the mouth — open, hungry, teeth top and bottom
+  rect(-8, 45, 16, 4, "#2a1208"); rect(-8, 48, 16, 1, d0);
+  for (let i = 0; i < 4; i++) rect(-7 + i * 4, 47, 2, 2, bone); // upper teeth
+  rect(-5, 45, 2, 2, bone); rect(3, 45, 2, 2, bone); // lower snags
+  rect(-8, 44, 16, 1, ink); // chin sel-out
+  p.fillStyle = d0; for (const [wx, wy] of [[-9, 38], [7, 30], [-6, 20]] as const) p.fillRect(X(wx), Y(wy), Math.max(1, Math.round(s)), Math.max(1, Math.round(s))); // scars
 }
 // a proper pixel humanoid creature: legs, tapered torso, arms, head, eyes/blink
 function creature(p: CanvasRenderingContext2D, cx: number, floorY: number, H: number, wd: number, body: string, bodyDk: string, eye: string, oneEye: boolean, t: number) {
