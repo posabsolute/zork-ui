@@ -6,6 +6,7 @@ import { Compass } from "./ui/compass.ts";
 import { startTitleScene } from "./ui/titleScene.ts";
 import { Scene2D } from "./ui/scene2d.ts";
 import { getRoomScene, darknessScene, roomState, setRoomFlag, flashThief } from "./ui/roomScenes.ts";
+import { ambience } from "./audio/ambience.ts";
 import { GameMap } from "./ui/map.ts";
 
 const output = document.getElementById("output") as HTMLElement;
@@ -35,6 +36,21 @@ function buildPlayers() {
     localStorage.setItem("zork1:slot", next); location.reload();
   };
   host.appendChild(add);
+  // ambient sound toggle — OFF by default; the click doubles as the AudioContext gesture
+  const snd = document.createElement("button");
+  const SND_KEY = SLOT === "1" ? "zork1:sound" : `zork1:sound:${SLOT}`;
+  const on = localStorage.getItem(SND_KEY) === "1";
+  snd.className = "pl-btn pl-snd" + (on ? " on" : ""); snd.textContent = "♪"; snd.title = "ambient sound";
+  snd.onclick = () => {
+    const now = !ambience.enabled;
+    ambience.toggle(now); snd.classList.toggle("on", now);
+    try { localStorage.setItem(SND_KEY, now ? "1" : "0"); } catch { /* quota */ }
+  };
+  host.appendChild(snd);
+  if (on) { // saved preference: arm on the first gesture of the session
+    const arm = () => { ambience.toggle(true); snd.classList.add("on"); window.removeEventListener("pointerdown", arm); window.removeEventListener("keydown", arm); };
+    window.addEventListener("pointerdown", arm); window.addEventListener("keydown", arm);
+  }
 }
 buildPlayers();
 
@@ -175,6 +191,7 @@ rooms.onChange((change) => {
   // record the room's real contents so scenes stop drawing props the player took
   setRoomFlag(change.room.id, "objects", (change.contents ?? []) as unknown as string[]);
   try { localStorage.setItem(ROOMS_KEY, JSON.stringify(roomState)); } catch { /* quota */ }
+  ambience.setFlags(roomState); ambience.setRoom(change.room.id, darkNow);
   applyScene(change.room, change.enteredFrom);
 });
 
@@ -225,7 +242,10 @@ async function startGame() {
         rooms.update(latestStatus);
         // Re-render if light/dark flipped or an interactive element changed,
         // without a room change (onChange only fires when the room changes).
-        if (currentRoom && (darkNow !== shownDark || interacted)) applyScene(currentRoom);
+        if (currentRoom && (darkNow !== shownDark || interacted)) {
+          ambience.setFlags(roomState); ambience.setRoom(currentRoom.id, darkNow);
+          applyScene(currentRoom);
+        }
         autosave();
       },
     },
@@ -269,6 +289,7 @@ async function startGame() {
   };
   (window as any).__thief = () => flashThief(); // Dev: trigger the thief's pass-through overlay
   (window as any).__flag = setRoomFlag; // Dev: toggle room flags to verify both scene states
+  (window as any).__mood = (id: string, dark = false) => { ambience.setFlags(roomState); ambience.setRoom(id, dark); }; // Dev: audition a room's soundscape
 }
 
 // --- Title screen: only a REAL Enter/click begins the game -----------------
