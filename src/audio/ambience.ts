@@ -118,13 +118,20 @@ class Ambience {
     const lfo = ctx.createOscillator(); lfo.frequency.value = wobble;
     const lfoG = ctx.createGain(); lfoG.gain.value = cutoff * 0.3;
     lfo.connect(lfoG); lfoG.connect(lp.frequency); lfo.start();
+    const all: OscillatorNode[] = [];
     const oscs = freqs.map((f, i) => {
-      const o = ctx.createOscillator(); o.type = i ? "triangle" : "sine"; o.frequency.value = f;
-      const g = ctx.createGain(); g.gain.value = 1 / freqs.length;
-      o.connect(g); g.connect(lp); o.start();
-      return o;
+      // fundamental + two octave partials so the drone survives laptop speakers
+      // (a bare 55Hz sine is inaudible on most of them)
+      let root: OscillatorNode | null = null;
+      for (const [mult, amp] of [[1, 1], [2, 0.45], [4, 0.16]] as const) {
+        const o = ctx.createOscillator(); o.type = i ? "triangle" : "sine"; o.frequency.value = f * mult;
+        const g = ctx.createGain(); g.gain.value = amp / freqs.length;
+        o.connect(g); g.connect(lp); o.start();
+        all.push(o); if (mult === 1) root = o;
+      }
+      return root!;
     });
-    this.stops.push(() => { oscs.forEach((o) => o.stop()); lfo.stop(); });
+    this.stops.push(() => { all.forEach((o) => o.stop()); lfo.stop(); });
     return oscs;
   }
 
@@ -167,29 +174,30 @@ class Ambience {
       this.noiseBed(b, "bandpass", 320, 0.6, 0.5, 0.07); // night wind
       this.every(9000, 22000, () => this.blip(b, 620, 540, 0.5, 0.05)); // something calls, far off
     } else if (m === "house") {
-      const b = this.bus(0.05);
-      this.noiseBed(b, "lowpass", 140, 0.5, 0.4, 0.04); // empty-house room tone
-      this.every(11000, 26000, () => this.blip(b, 120, 60, 0.35, 0.3, "sawtooth")); // a timber settles
+      const b = this.bus(0.1);
+      this.noiseBed(b, "lowpass", 220, 0.5, 0.55, 0.04); // empty-house room tone
+      this.drone(b, [82.5], 300, 0.03); // the hush of the old walls
+      this.every(9000, 20000, () => this.blip(b, 130, 60, 0.4, 0.5, "sawtooth")); // a timber settles
     } else if (m === "water" || m === "falls") {
       const b = this.bus(m === "falls" ? 0.2 : 0.12);
       this.noiseBed(b, "bandpass", 700, 0.4, 0.7, 0.16); // running water
       if (m === "falls") this.noiseBed(b, "lowpass", 90, 0.7, 0.8, 0.05); // the plunge rumble
       this.drone(b, [55], 120, 0.03);
     } else if (m === "hades") {
-      const b = this.bus(0.1);
-      this.drone(b, [48.99, 51.91, 98], 220, 0.05); // a minor-second cluster, uneasy
+      const b = this.bus(0.13);
+      this.drone(b, [48.99, 51.91, 98], 380, 0.05); // a minor-second cluster, uneasy
       this.every(12000, 28000, () => this.blip(b, 300, 150, 2.2, 0.06)); // a distant moan
     } else if (m === "maze") {
-      const b = this.bus(0.09);
-      const oscs = this.drone(b, [55, 82.5], 200, 0.05);
+      const b = this.bus(0.13);
+      const oscs = this.drone(b, [55, 82.5], 420, 0.05);
       const lfo = this.ctx.createOscillator(); lfo.frequency.value = 0.045; // ~20s cycle
       const lg = this.ctx.createGain(); lg.gain.value = 1.4; // ± cents of wrongness
       lfo.connect(lg); lg.connect(oscs[1].detune); lfo.start();
       this.stops.push(() => lfo.stop());
-      this.every(5000, 12000, () => this.blip(b, 1100 + Math.random() * 500, 350, 0.5, 0.08)); // drips
+      this.every(5000, 12000, () => this.blip(b, 1100 + Math.random() * 500, 350, 0.5, 0.16)); // drips
     } else if (m === "temple") {
-      const b = this.bus(0.09);
-      this.drone(b, [55, 110.3], 240, 0.04);
+      const b = this.bus(0.13);
+      this.drone(b, [55, 110.3], 420, 0.04);
       this.every(14000, 30000, () => this.blip(b, 523, 519, 3.5, 0.05, "triangle")); // a bell partial hangs in the air
     } else if (m === "dark") {
       const b = this.bus(0.12);
@@ -198,9 +206,9 @@ class Ambience {
         this.timers.push(window.setTimeout(() => this.blip(b, 52, 38, 0.12, 0.35), 260));
       });
     } else {
-      const b = this.bus(0.09); // underground
-      this.drone(b, [55, 82.5], 200, 0.05);
-      this.every(4500, 11000, () => this.blip(b, 1200 + Math.random() * 400, 380, 0.5, 0.08)); // cave drips
+      const b = this.bus(0.14); // underground
+      this.drone(b, [55, 82.5], 420, 0.05);
+      this.every(4500, 11000, () => this.blip(b, 1200 + Math.random() * 400, 380, 0.5, 0.16)); // cave drips
     }
     // tension: a monster alive in this very room
     const rs = this.flags;
