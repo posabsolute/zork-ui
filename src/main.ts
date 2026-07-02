@@ -36,19 +36,21 @@ function buildPlayers() {
     localStorage.setItem("zork1:slot", next); location.reload();
   };
   host.appendChild(add);
-  // ambient sound toggle — OFF by default; the click doubles as the AudioContext gesture
+  // ambient sound toggle — ON by default (any first gesture unlocks the audio)
   const snd = document.createElement("button");
   const SND_KEY = SLOT === "1" ? "zork1:sound" : `zork1:sound:${SLOT}`;
-  const on = localStorage.getItem(SND_KEY) === "1";
-  snd.className = "pl-btn pl-snd" + (on ? " on" : ""); snd.textContent = "♪"; snd.title = "ambient sound";
+  const on = localStorage.getItem(SND_KEY) !== "0";
+  snd.className = "pl-btn pl-snd" + (on ? " on" : ""); snd.title = "ambient sound";
+  const paint = (v: boolean) => { snd.classList.toggle("on", v); snd.textContent = v ? "♪ ON" : "♪ OFF"; };
+  paint(on);
   snd.onclick = () => {
     const now = !ambience.enabled;
-    ambience.toggle(now); snd.classList.toggle("on", now);
+    ambience.toggle(now); paint(now);
     try { localStorage.setItem(SND_KEY, now ? "1" : "0"); } catch { /* quota */ }
   };
   host.appendChild(snd);
-  if (on) { // saved preference: arm on the first gesture of the session
-    const arm = () => { ambience.toggle(true); snd.classList.add("on"); window.removeEventListener("pointerdown", arm); window.removeEventListener("keydown", arm); };
+  if (on) { // arm on the first gesture of the session (browser autoplay rules)
+    const arm = () => { ambience.toggle(true); paint(true); window.removeEventListener("pointerdown", arm); window.removeEventListener("keydown", arm); };
     window.addEventListener("pointerdown", arm); window.addEventListener("keydown", arm);
   }
 }

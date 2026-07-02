@@ -141,6 +141,9 @@ html, body {
 .pl-btn { width: 22px; height: 20px; background: #04140a; border: 1px solid #1f5a33; color: #8affb0; font-family: var(--term-font); font-size: 12px; line-height: 1; cursor: pointer; padding: 0; }
 .pl-btn.on { background: #0d3a1c; border-color: #5dff8a; color: #b9ffd0; }
 .pl-btn:hover { border-color: #2f8a4a; }
+/* the ambient-sound toggle: set apart from the slots, clearly readable */
+.pl-btn.pl-snd { width: auto; padding: 0 8px; margin-left: 12px; letter-spacing: 0.08em; font-size: 11px; border-color: #1f5a33; color: #3fa863; }
+.pl-btn.pl-snd.on { background: #0d3a1c; border-color: #5dff8a; color: #b9ffd0; box-shadow: 0 0 6px rgba(93, 255, 138, 0.35); }
 
 #app {
   display: grid;
