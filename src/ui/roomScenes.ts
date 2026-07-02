@@ -2920,15 +2920,22 @@ function cellarPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: num
     // and meets it: one structure, floor to hatch.
     const tdOpen = rf("LIVING-ROOM", "trapOpen");
     const cu0 = Math.round(by0 * 0.40), cu1 = Math.round(by0 * 0.78);
-    // the rail: from the flagstones up the west wall to the hatch's near corner
-    const rx0 = 2, ry0 = Math.round(ph * 0.78);
-    const rx1 = Math.round(bx0 * ((cu0 + cu1) / 2 / by0)), ry1 = Math.round((cu0 + cu1) / 2);
-    for (let x = rx0; x <= rx1; x++) {
-      const f = (x - rx0) / Math.max(1, rx1 - rx0), y = Math.round(ry0 + (ry1 - ry0) * f);
-      p.fillStyle = "#7a828c"; p.fillRect(x, y, 1, 1); // lit crown of the upper rail
-      p.fillStyle = "#4c525b"; p.fillRect(x, y + 1, 1, 1);
-      p.fillStyle = "#3a3e45"; p.fillRect(x, y + 6, 1, 2); // lower rail, in shade
+    // the rail: its FOOT stands on the wall-floor junction, and it leans up the
+    // west wall to the hatch — a steep straight run, planted, not painted on
+    const uh = ((cu0 + cu1) / 2) / by0; // the hatch's depth along the wall
+    const u0r = 0.2; // the foot, forward of it along the floor line
+    const fx0 = Math.round(bx0 * u0r), fy0 = Math.round(ph + (by1 - ph) * u0r);
+    const rx1 = Math.round(bx0 * uh), ry1 = Math.round(by0 * uh);
+    p.fillStyle = "#101318"; p.fillRect(fx0 - 2, fy0 + 1, 12, 2); // shadow where it stands
+    for (let y = ry1; y <= fy0; y++) {
+      const f = (y - ry1) / Math.max(1, fy0 - ry1);
+      const x = Math.round(rx1 + (fx0 - rx1) * f), gap = 3 + Math.round(f * 3); // rails spread nearing the viewer
+      p.fillStyle = "#7a828c"; p.fillRect(x, y, 1, 1); // lit near rail
+      p.fillStyle = "#4c525b"; p.fillRect(x + 1, y, 1, 1);
+      p.fillStyle = "#3a3e45"; p.fillRect(x + gap + 1, y, 1, 1); // far rail, in shade
+      if ((fy0 - y) % 9 === 4) { p.fillStyle = "#2e3238"; p.fillRect(x + 2, y, gap - 1, 1); } // cross-ties
     }
+    p.fillStyle = "#565b63"; p.fillRect(fx0 - 1, fy0 - 1, 10, 2); p.fillStyle = "#767d87"; p.fillRect(fx0 - 1, fy0 - 1, 10, 1); // the foot plate on the flagstones
     for (let y = cu0; y <= cu1; y++) {
       const u = y / by0;
       const xl = Math.round(bx0 * u), xr = Math.round(pw + (bx1 - pw) * u);
