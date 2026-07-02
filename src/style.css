@@ -360,3 +360,46 @@ html, body {
   caret-color: var(--term-fg);
 }
 
+/* the MAP toggle only exists on small screens (desktop shows the map beside) */
+.pl-btn.pl-map { display: none; }
+
+/* ===== Mobile / small screens =====
+   Phones can't fit the side-by-side desktop grid: stack scene over terminal,
+   and turn the map into a full-screen slide-in behind a MAP button. 100dvh +
+   interactive-widget=resizes-content keeps the prompt above the keyboard. */
+@media (max-width: 820px), (max-height: 520px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    height: 100dvh;
+  }
+  #main { grid-template-rows: minmax(150px, 34%) 1fr; }
+  #mapPanel {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    border-left: none;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+  body.map-open #mapPanel { transform: translateX(0); }
+  /* while the map covers the screen, the bar reduces to a lone CLOSE button */
+  body.map-open #players > *:not(.pl-map) { display: none; }
+  body.map-open .map-head { padding-left: 84px; }
+  .pl-btn.pl-map { display: inline-block; width: auto; padding: 0 8px; margin-left: 8px; letter-spacing: 0.08em; font-size: 11px; }
+  #players { z-index: 45; } /* MAP/CLOSE stays reachable above the map overlay */
+  .pl-btn.pl-snd { margin-left: 8px; }
+  #compass { top: 8px; right: 8px; width: 64px; }
+  #compass svg { width: 64px; height: 64px; }
+  #terminal { padding: 10px 12px calc(8px + env(safe-area-inset-bottom)); }
+  #output { font-size: 14px; }
+  #caret { font-size: 16px; }
+  #input { font-size: 16px; } /* 16px stops iOS zoom-on-focus */
+}
+
+/* rotated phone: scene and terminal side by side so both stay usable */
+@media (max-height: 520px) and (min-aspect-ratio: 5/4) {
+  #main { grid-template-rows: 1fr; grid-template-columns: 46fr 54fr; }
+  #viewport { border-bottom: none; border-right: 2px solid #0a3318; }
+}
+

@@ -49,6 +49,15 @@ function buildPlayers() {
     try { localStorage.setItem(SND_KEY, now ? "1" : "0"); } catch { /* quota */ }
   };
   host.appendChild(snd);
+  // MAP toggle — small screens only (CSS hides it on desktop, where the map is docked)
+  const map = document.createElement("button");
+  map.className = "pl-btn pl-map"; map.textContent = "MAP"; map.title = "toggle map";
+  map.onclick = (e) => {
+    e.stopPropagation(); // don't let the global click handler summon the keyboard
+    const open = document.body.classList.toggle("map-open");
+    map.textContent = open ? "CLOSE" : "MAP";
+  };
+  host.appendChild(map);
   if (on) { // arm on the first gesture of the session (browser autoplay rules)
     const arm = () => { ambience.toggle(true); paint(true); window.removeEventListener("pointerdown", arm); window.removeEventListener("keydown", arm); };
     window.addEventListener("pointerdown", arm); window.addEventListener("keydown", arm);
@@ -308,7 +317,9 @@ function begin() {
   stopTitle();
   welcome?.classList.add("hidden");
   setTimeout(() => welcome?.remove(), 1100);
-  input.focus();
+  // On touch, wait for a deliberate tap on the terminal — auto-focusing here
+  // would throw the keyboard over the opening scene.
+  if (!matchMedia("(pointer: coarse)").matches) input.focus();
   startGame().catch((err) => {
     console.error(err);
     output.appendChild(document.createTextNode("\n[boot error] " + err.message));
@@ -322,10 +333,20 @@ window.addEventListener("keydown", (e) => {
     begin();
   }
 });
+// no Enter key on a phone — the title button says what to actually do
+if (matchMedia("(pointer: coarse)").matches) {
+  const start = document.querySelector("#welcome .start");
+  if (start) start.textContent = "TAP TO BEGIN";
+}
 welcome?.addEventListener("click", begin);
 
-document.addEventListener("click", () => {
-  if (begun) input.focus();
+document.addEventListener("click", (e) => {
+  if (!begun) return;
+  // On touch screens, focusing pops the keyboard over half the game — only do
+  // it for taps in the terminal. Mouse users keep the type-anywhere behavior.
+  if (matchMedia("(pointer: coarse)").matches) {
+    if ((e.target as HTMLElement | null)?.closest("#terminal")) input.focus();
+  } else input.focus();
 });
 
 if (!welcome) begin(); // no title screen present — start directly
