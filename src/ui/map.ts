@@ -91,12 +91,39 @@ export class GameMap {
       if (z !== null) { this.floor = Number(z); this.followPlayer = false; this.panx = 0; this.pany = 0; this.render(); }
     });
     this.canvas.addEventListener("wheel", (e) => { e.preventDefault(); const f = e.deltaY < 0 ? 1.1 : 1 / 1.1; this.zoom = Math.max(0.45, Math.min(2.6, this.zoom * f)); this.userZoomed = true; this.render(); }, { passive: false });
-    this.canvas.addEventListener("mousedown", (e) => { this.drag = { x: e.clientX, y: e.clientY, moved: false }; });
-    window.addEventListener("mouseup", () => { setTimeout(() => { this.drag = null; }, 0); });
-    this.canvas.addEventListener("mousemove", (e) => {
-      if (this.drag) { const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y; if (Math.abs(dx) + Math.abs(dy) > 2) { this.drag.moved = true; this.followPlayer = false; this.panx += dx; this.pany += dy; this.drag.x = e.clientX; this.drag.y = e.clientY; this.tip.style.display = "none"; this.render(); } return; }
-      this.onHover(e);
+    // Pointer events cover mouse AND touch (a finger never fires mousemove
+    // while dragging); touch-action:none stops the browser eating the gesture.
+    this.canvas.style.touchAction = "none";
+    const pts = new Map<number, { x: number; y: number }>();
+    let pinchD = 0;
+    this.canvas.addEventListener("pointerdown", (e) => {
+      try { this.canvas.setPointerCapture(e.pointerId); } catch { /* synthetic events have no live pointer */ }
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) this.drag = { x: e.clientX, y: e.clientY, moved: false };
+      else { // a second finger switches from pan to pinch-zoom
+        this.drag = null;
+        const [a, b] = [...pts.values()];
+        pinchD = Math.hypot(a.x - b.x, a.y - b.y);
+      }
     });
+    this.canvas.addEventListener("pointermove", (e) => {
+      if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchD > 0 && d > 0) { this.zoom = Math.max(0.45, Math.min(2.6, this.zoom * (d / pinchD))); this.userZoomed = true; pinchD = d; this.tip.style.display = "none"; this.render(); }
+        return;
+      }
+      if (this.drag) { const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y; if (Math.abs(dx) + Math.abs(dy) > 2) { this.drag.moved = true; this.followPlayer = false; this.panx += dx; this.pany += dy; this.drag.x = e.clientX; this.drag.y = e.clientY; this.tip.style.display = "none"; this.render(); } return; }
+      if (e.pointerType === "mouse") this.onHover(e);
+    });
+    const endPointer = (e: PointerEvent) => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinchD = 0;
+      if (pts.size === 0) setTimeout(() => { this.drag = null; }, 0);
+    };
+    this.canvas.addEventListener("pointerup", endPointer);
+    this.canvas.addEventListener("pointercancel", endPointer);
     this.canvas.addEventListener("mouseleave", () => { this.tip.style.display = "none"; });
     this.canvas.addEventListener("click", (e) => { if (this.drag?.moved) return; const n = this.hit(e); if (n) { this.selected = n.id; this.render(); } });
     window.addEventListener("resize", () => this.render());
