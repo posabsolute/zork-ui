@@ -56,4 +56,6 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, "0.0.0.0", () => console.log(`zork-ui serving dist/ on :${PORT}`));
+// "::" binds dual-stack (IPv6 + IPv4) — Railway's proxy fabric reaches the
+// container over IPv6, so an IPv4-only bind can 502 at the edge.
+server.listen(PORT, "::", () => console.log(`zork-ui serving dist/ on :${PORT}`));
