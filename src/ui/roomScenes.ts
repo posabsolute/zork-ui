@@ -491,10 +491,7 @@ function housePixel(p: CanvasRenderingContext2D, pw: number, ph: number, horizon
       p.fillStyle = "#262a32"; p.fillRect(dx - 2, dy - 1, 2, dh - 2); p.fillRect(dx + dw, dy - 1, 2, dh - 2); // the entry recess, sunk in shadow
       p.fillStyle = doorW; p.fillRect(dx, dy, dw, dh); p.fillStyle = doorL; for (let k = 0; k < 3; k++) p.fillRect(dx, dy + 4 + k * Math.round(dh * 0.26), dw, 2); p.fillStyle = "#241a10"; p.fillRect(cx, dy, 1, dh); // boarded door
       p.fillStyle = trim; p.fillRect(dx - 3, dy - 2, 1, dh + 2); p.fillRect(dx + dw + 2, dy - 2, 1, dh + 2); // pilasters
-      const fr = Math.round(dw * 0.5) + 1, fcy = dy - 2;
-      for (let yy = 0; yy < fr; yy++) { const hwd = Math.round(Math.sqrt(Math.max(0, fr * fr - yy * yy))); p.fillStyle = "#12161e"; p.fillRect(cx - hwd, fcy - yy, hwd * 2, 1); p.fillStyle = trim; p.fillRect(cx - hwd, fcy - yy, 1, 1); p.fillRect(cx + hwd - 1, fcy - yy, 1, 1); } // fanlight (half-round transom)
-      p.fillStyle = "#39414c"; p.fillRect(cx, fcy - fr + 1, 1, fr); p.fillStyle = trim; p.fillRect(cx - fr - 1, fcy + 1, fr * 2 + 2, 1); // muntin + lintel
-      for (let i = 0; i < Math.round(dw * 0.6) + 2; i++) { const half = Math.round(dw * 0.6) + 3 - i; if (half > 0) { p.fillStyle = trim; p.fillRect(cx - half, fcy - fr - 1 - i, half * 2, 1); } } // crowning pediment
+      p.fillStyle = trim; p.fillRect(dx - 3, dy - 3, dw + 6, 1); p.fillStyle = "#565c66"; p.fillRect(dx - 3, dy - 2, dw + 6, 1); // plain flat lintel, nothing above it
     } else {
       // back: a simpler, well-spaced 3-bay × 2 grid; one corner window is ajar (the way in)
       const bays = [0.22, 0.5, 0.78].map((f) => x0 + Math.round(hw * f));
@@ -526,17 +523,24 @@ function housePixel(p: CanvasRenderingContext2D, pw: number, ph: number, horizon
   }
 }
 function mailboxPixel(p: CanvasRenderingContext2D, x: number, y: number) {
-  p.fillStyle = "#23262d"; p.fillRect(x, y - 9, 2, 10); // post
-  p.fillStyle = "#3c4452"; p.fillRect(x - 3, y - 14, 8, 5); // box body
+  // dithered shadow pool so it sits ON the lawn instead of dissolving into it
+  for (let yy = y - 1; yy < y + 3; yy++) for (let xx = x - 8; xx < x + 10; xx++) { const ex = (xx - x) / 8, ey = (yy - y) / 2.2, dd = ex * ex + ey * ey; if (dd < 1 && (1 - dd) * 0.8 > dth(xx, yy)) { p.fillStyle = "#040604"; p.fillRect(xx, yy, 1, 1); } }
+  p.fillStyle = "#101216"; p.fillRect(x - 1, y - 11, 4, 12); // post, near-black
+  p.fillStyle = "#2e333c"; p.fillRect(x, y - 11, 1, 12); // its moonlit edge
+  // the box: a real mailbox loaf — dark outline, moon-caught rounded lid
+  p.fillStyle = "#0c0e12"; p.fillRect(x - 6, y - 19, 13, 8); // sel-out mass
+  p.fillStyle = "#3c4452"; p.fillRect(x - 5, y - 18, 11, 6); // body
+  p.fillStyle = "#788699"; p.fillRect(x - 5, y - 18, 11, 1); p.fillRect(x - 4, y - 19, 9, 1); // rounded lid, bright in the moon
+  p.fillStyle = "#232830"; p.fillRect(x + 4, y - 17, 2, 5); // shadowed end
   if (rf("WEST-OF-HOUSE", "mailboxOpen")) { // open — the little door is up and the leaflet shows
-    p.fillStyle = "#15171c"; p.fillRect(x - 2, y - 13, 6, 4); // dark interior
-    p.fillStyle = "#e8e0c0"; p.fillRect(x - 1, y - 13, 4, 3); // the leaflet
-    p.fillStyle = "#3c4452"; p.fillRect(x - 4, y - 17, 8, 3); p.fillStyle = "#525b6a"; p.fillRect(x - 4, y - 17, 8, 1); // the open door, raised
+    p.fillStyle = "#15171c"; p.fillRect(x - 4, y - 16, 8, 4); // dark interior
+    p.fillStyle = "#e8e0c0"; p.fillRect(x - 3, y - 16, 6, 3); // the leaflet
+    p.fillStyle = "#4c5665"; p.fillRect(x - 6, y - 22, 11, 3); p.fillStyle = "#8a98ac"; p.fillRect(x - 6, y - 22, 11, 1); // the door, thrown up
   } else {
-    p.fillStyle = "#525b6a"; p.fillRect(x - 3, y - 14, 8, 1); // lid highlight
-    p.fillStyle = "#15171c"; p.fillRect(x - 3, y - 13, 1, 3); // slot
+    p.fillStyle = "#15171c"; p.fillRect(x - 5, y - 16, 1, 3); // the front-door seam
+    p.fillStyle = "#525b6a"; p.fillRect(x - 4, y - 15, 2, 1); // latch
   }
-  p.fillStyle = "#b03a2a"; p.fillRect(x + 5, y - 14, 1, 3); // flag
+  p.fillStyle = "#c8432e"; p.fillRect(x + 7, y - 19, 2, 4); p.fillRect(x + 7, y - 19, 4, 2); // the little red flag, up
 }
 function fgTreePixel(p: CanvasRenderingContext2D, pw: number, ph: number, t: number) {
   const ink = "#04060a";
@@ -3689,7 +3693,7 @@ let _thiefFlash = false, _thiefT0 = -1;
 export function flashThief() { _thiefFlash = true; _thiefT0 = -1; }
 function thiefOverlay(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   if (!_thiefFlash) return;
-  if (_thiefT0 < 0) _thiefT0 = t;
+  if (_thiefT0 < 0 || t < _thiefT0) _thiefT0 = t; // (< guards a clock swap, e.g. the __scene preview)
   const dt = t - _thiefT0; const DUR = 4.5;
   if (dt > DUR) { _thiefFlash = false; return; }
   const a = dt < 0.6 ? dt / 0.6 : dt > DUR - 1.3 ? Math.max(0, (DUR - dt) / 1.3) : 1; // fade in, stride, fade out

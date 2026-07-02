@@ -27,15 +27,23 @@ export interface LiveState {
 const OBJ_ENTRY = 9; // bytes per v3 object entry
 const PROP_DEFAULTS = 31 * 2; // 62 bytes of property defaults
 
+// Z-text v3 alphabets (Standard 1.1 §3). A2[0] is the 10-bit escape, A2[1] newline.
+const A0 = "abcdefghijklmnopqrstuvwxyz";
+const A1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const A2 = "??0123456789.,!?_#'\"/\\-:()";
+
 export class Introspector {
   private m: any;
   private objTable: number;
   private globals: number;
+  private abbrevs: number;
+  private nameCache = new Map<number, string>();
 
   constructor(private vm: any) {
     this.m = vm.m;
     this.objTable = this.m.getUint16(0x0a);
     this.globals = this.m.getUint16(0x0c);
+    this.abbrevs = this.m.getUint16(0x18);
   }
 
   /** Word value of a global variable (16..255). */
@@ -73,6 +81,60 @@ export class Introspector {
   /** The current room object number (global 16 = the v3 status-line object). */
   currentRoom(): number {
     return this.global(16);
+  }
+
+  /** All descendants of an object (children, grandchildren, …), bounded. */
+  descendantsOf(obj: number, depth = 4): number[] {
+    if (depth <= 0) return [];
+    const out: number[] = [];
+    for (const c of this.childrenOf(obj)) {
+      out.push(c, ...this.descendantsOf(c, depth - 1));
+      if (out.length > 128) break; // corrupt-tree guard
+    }
+    return out;
+  }
+
+  /** Decode a Z-text string at a byte address (v3, with abbreviations). */
+  private ztext(addr: number, allowAbbrev = true): string {
+    const z: number[] = [];
+    for (let a = addr, guard = 0; guard < 128; a += 2, guard++) {
+      const w = this.m.getUint16(a);
+      z.push((w >> 10) & 31, (w >> 5) & 31, w & 31);
+      if (w & 0x8000) break;
+    }
+    let out = "", alpha = 0;
+    for (let i = 0; i < z.length; i++) {
+      const c = z[i];
+      if (c === 0) { out += " "; alpha = 0; }
+      else if (c <= 3) {
+        if (allowAbbrev && i + 1 < z.length) {
+          const entry = 32 * (c - 1) + z[++i];
+          out += this.ztext(2 * this.m.getUint16(this.abbrevs + 2 * entry), false);
+        }
+        alpha = 0;
+      } else if (c === 4) alpha = 1;
+      else if (c === 5) alpha = 2;
+      else {
+        if (alpha === 2 && c === 6) { // 10-bit ZSCII escape
+          if (i + 2 < z.length) { out += String.fromCharCode(((z[i + 1] << 5) | z[i + 2]) & 1023); i += 2; }
+        } else out += (alpha === 1 ? A1 : alpha === 2 ? A2 : A0)[c - 6];
+        alpha = 0;
+      }
+    }
+    return out;
+  }
+
+  /** An object's short name ("brown sack"), decoded from its property table. */
+  shortName(obj: number): string {
+    const hit = this.nameCache.get(obj);
+    if (hit !== undefined) return hit;
+    let name = "";
+    try {
+      const props = this.m.getUint16(this.objAddr(obj) + 7);
+      if (this.m.getUint8(props) > 0) name = this.ztext(props + 1);
+    } catch { /* unreadable — leave blank */ }
+    this.nameCache.set(obj, name);
+    return name;
   }
 
   /** Whether object has a given attribute bit set (0..31). */

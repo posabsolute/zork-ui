@@ -87,6 +87,7 @@ export class RoomState {
 
   currentId: string | null = null;
   private lastDir: string | undefined;
+  private lastContents = "";
   private intro: Introspector | null = null;
 
   async load() {
@@ -136,7 +137,18 @@ export class RoomState {
         contents: this.resolveContents(objNum),
         enteredFrom: prev ? this.lastDir : undefined,
       };
+      this.lastContents = change.contents.join("|");
       for (const fn of this.listeners) fn(change);
+    } else {
+      // Same room, but the turn may have moved things (take, drop, the thief).
+      const room = this.rooms[id];
+      const contents = this.resolveContents(objNum);
+      const key = contents.join("|");
+      if (room && key !== this.lastContents) {
+        this.lastContents = key;
+        const change: RoomChange = { room, objNum, isDark: this.computeDark(room), contents };
+        for (const fn of this.listeners) fn(change);
+      }
     }
     this.lastDir = undefined;
   }
@@ -253,10 +265,54 @@ export class RoomState {
     return lines.join("\n");
   }
 
+  // Short-name → ZIL id, built once from objects.json (unique names only).
+  private nameToId: Map<string, string> | null = null;
+  private buildNameMap(): Map<string, string> {
+    if (this.nameToId) return this.nameToId;
+    const m = new Map<string, string>(), dup = new Set<string>();
+    for (const o of Object.values(this.objects) as GameObject[]) {
+      const k = o.name.toLowerCase();
+      if (dup.has(k)) continue;
+      if (m.has(k)) { m.delete(k); dup.add(k); } // ambiguous ("basket", "mirror") — skip
+      else m.set(k, o.id);
+    }
+    m.set("tube", "TUBE"); // present in the game but absent from objects.json
+    this.nameToId = m;
+    return m;
+  }
+
   private resolveContents(objNum: number): string[] {
-    // Map live child object numbers to ZIL ids where we can (by static room data).
-    // Without a number→id map for props we fall back to the room's static objects.
+    // Walk the LIVE object tree (room + everything nested in containers/surfaces)
+    // and map each object's decoded short name to its ZIL id. This is what makes
+    // scenes track reality: the sack ON the kitchen table is a grandchild of the
+    // room, and taken/stolen items drop out of the tree.
     const room = this.currentId ? this.rooms[this.currentId] : null;
-    return room ? room.objects.slice() : [];
+    const staticList = room ? room.objects.slice() : [];
+    if (!this.intro) return staticList;
+    try {
+      const names = this.buildNameMap();
+      const ids: string[] = [];
+      const intro = this.intro;
+      const walk = (num: number, depth: number) => {
+        for (const n of intro.childrenOf(num)) {
+          const short = intro.shortName(n).toLowerCase();
+          if (short === "cretin" || short === "adventurer" || short === "you") continue; // the player + inventory is not room dressing
+          const id = names.get(short);
+          if (id && !ids.includes(id)) ids.push(id);
+          if (depth > 0 && ids.length < 64) walk(n, depth - 1);
+        }
+      };
+      walk(objNum, 3);
+      // Fixed scenery (tables, doors, the mailbox…) stays from the static list;
+      // anything TAKEBIT must earn its place from the live tree, so taken and
+      // stolen items actually vanish from the scene.
+      for (const s of staticList) {
+        const takeable = this.objects[s]?.flags?.includes("TAKEBIT");
+        if (!takeable && !ids.includes(s)) ids.push(s);
+      }
+      return ids;
+    } catch {
+      return staticList; // memory layout surprise — never blank the scene over it
+    }
   }
 }

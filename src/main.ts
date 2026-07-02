@@ -187,6 +187,7 @@ function nextClue(): string {
 }
 
 rooms.onChange((change) => {
+  const sameRoom = currentRoom?.id === change.room.id;
   compass.update(change.room);
   gameMap?.discover(change);
   currentRoom = change.room;
@@ -194,7 +195,9 @@ rooms.onChange((change) => {
   setRoomFlag(change.room.id, "objects", (change.contents ?? []) as unknown as string[]);
   try { localStorage.setItem(ROOMS_KEY, JSON.stringify(roomState)); } catch { /* quota */ }
   ambience.setFlags(roomState); ambience.setRoom(change.room.id, darkNow);
-  applyScene(change.room, change.enteredFrom);
+  // A same-room emission is just a contents refresh (take/drop/theft) — the 2D
+  // canvas reads roomState live; don't restart scene/viewport transitions for it.
+  if (!sameRoom || shownDark !== darkNow) applyScene(change.room, change.enteredFrom);
 });
 
 async function startGame() {
