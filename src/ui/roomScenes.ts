@@ -2915,11 +2915,21 @@ function cellarPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: num
     const dwx = Math.round((bx0 + bx1) / 2), dw = Math.round((bx1 - bx0) * 0.22), dh = Math.round((by1 - by0) * 0.7);
     p.fillStyle = "#4a4e56"; p.fillRect(dwx - dw / 2 - 2, by1 - dh - 2, dw + 4, dh + 2); // stone lintel/jambs
     p.fillStyle = "#050608"; p.fillRect(dwx - dw / 2, by1 - dh, dw, dh); // the dark passage
-    // the steep metal ramp on the WEST — bolted up the left wall toward the back, too steep to climb
-    const r0x = Math.round(pw * 0.02), r0y = Math.round(ph * 0.9), r1x = bx0 - 2, r1y = by0 + Math.round((by1 - by0) * 0.3);
-    const steps = Math.max(Math.abs(r1x - r0x), Math.abs(r1y - r0y));
-    for (let s = 0; s <= steps; s++) { const f = s / steps, x = Math.round(r0x + (r1x - r0x) * f), y = Math.round(r0y + (r1y - r0y) * f); p.fillStyle = "#565b63"; p.fillRect(x, y - 4, 4, 9); p.fillStyle = "#787d86"; p.fillRect(x, y - 4, 4, 1); p.fillStyle = "#3a3e45"; p.fillRect(x, y + 4, 4, 1); }
-    for (let s = 0; s <= steps; s += 7) { const f = s / steps, x = Math.round(r0x + (r1x - r0x) * f), y = Math.round(r0y + (r1y - r0y) * f); p.fillStyle = "#43474e"; p.fillRect(x - 1, y - 4, 2, 9); p.fillStyle = "#9aa0aa"; p.fillRect(x + 1, y - 2, 1, 1); } // struts + rivets
+    // the steep metal ramp on the WEST — the slide's smooth run-out leaning UP the
+    // left wall into the dark. A chute, not a staircase: no treads, nothing to climb.
+    const fy = by1 + Math.round((ph - by1) * 0.5), fx = Math.round(pw * 0.2); // its foot rests ON the floor
+    const ty2 = by0 + Math.round((by1 - by0) * 0.08), tx2 = 0; // vanishing high on the wall
+    p.fillStyle = "#14161a"; p.fillRect(fx - 13, fy + 3, 30, 2); // cast shadow at the foot
+    for (let y = ty2; y <= fy; y++) {
+      const f = (y - ty2) / (fy - ty2);
+      const cx2 = Math.round(tx2 + (fx - tx2) * f), half = 5 + Math.round(f * 6); // widens toward the viewer
+      p.fillStyle = "#4c525b"; p.fillRect(cx2 - half, y, half * 2, 1); // sheet-metal bed
+      p.fillStyle = "#6a707a"; p.fillRect(cx2 + half - 2, y, 2, 1); // lamp-lit right rail
+      p.fillStyle = "#2e3238"; p.fillRect(cx2 - half, y, 2, 1); // shadowed left rail
+    }
+    for (const off of [-3, 2]) for (let y = ty2 + 4; y < fy - 2; y++) { const f = (y - ty2) / (fy - ty2); const cx2 = Math.round(tx2 + (fx - tx2) * f); if (hash(y, off + 9) > 0.3) { p.fillStyle = "#7e858f"; p.fillRect(cx2 + off, y, 1, 1); } } // long streaks buffed by ten thousand landings
+    for (let y = ty2 + 3; y < fy; y += 6) { const f = (y - ty2) / (fy - ty2); const cx2 = Math.round(tx2 + (fx - tx2) * f), half = 5 + Math.round(f * 6); p.fillStyle = "#9aa0aa"; p.fillRect(cx2 + half - 1, y, 1, 1); } // rivets up the rail
+    p.fillStyle = "#565b63"; p.fillRect(fx - 12, fy + 1, 26, 3); p.fillStyle = "#787d86"; p.fillRect(fx - 12, fy + 1, 26, 1); // the flared landing lip
     // the low crawlway SOUTH — a small dark hole at the front of the floor
     p.fillStyle = "#43474e"; p.fillRect(Math.round(pw * 0.5) - Math.round(pw * 0.09), ph - Math.round(ph * 0.1) - 1, Math.round(pw * 0.18), 2);
     p.fillStyle = "#050608"; p.fillRect(Math.round(pw * 0.5) - Math.round(pw * 0.08), ph - Math.round(ph * 0.1), Math.round(pw * 0.16), Math.round(ph * 0.1));
