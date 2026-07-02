@@ -482,7 +482,7 @@ function housePixel(p: CanvasRenderingContext2D, pw: number, ph: number, horizon
     const wyU = wallTop + Math.round(wallH * 0.13), wyL = midY + Math.round(wallH * 0.12);
     if (face === "front") {
       const bays = [0.1, 0.3, 0.5, 0.7, 0.9].map((f) => x0 + Math.round(hw * f)); // strict 5-bay
-      for (const bx of bays) win(bx, wyU, "boarded"); // upper storey: 5 windows
+      win(bays[0], wyU, "boarded"); win(bays[1], wyU, "boarded"); win(bays[3], wyU, "boarded"); win(bays[4], wyU, "boarded"); // upper storey: 4 windows, clear clapboard above the door
       win(bays[0], wyL, "boarded"); win(bays[1], wyL, "boarded"); win(bays[3], wyL, "boarded"); win(bays[4], wyL, "boarded"); // 4 flanking the door
       // ---- the centred entrance: pilasters, pediment, fanlight, boarded door ----
       const dw = Math.max(8, Math.round(hw * 0.1)), dh = Math.round(wallH * 0.48), dx = cx - Math.round(dw / 2), dy = baseY - dh;
