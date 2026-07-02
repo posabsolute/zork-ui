@@ -147,7 +147,9 @@ html, body {
 
 #app {
   display: grid;
-  grid-template-columns: 1fr 360px; /* play area + discovery map */
+  /* The pixel-art scene upscales a 256px buffer — past ~1600px the blocks turn
+     mushy, so the play area caps there and the map absorbs the leftover width. */
+  grid-template-columns: minmax(0, 1600px) minmax(360px, 1fr);
   height: 100vh;
   width: 100vw;
   gap: 0;
