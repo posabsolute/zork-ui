@@ -48,10 +48,10 @@ class Ambience {
   private timers: number[] = [];
   private mood: Mood | null = null;
   private roomId = "";
-  private flags: Record<string, Record<string, boolean | string[]>> = {};
+  private flags: Record<string, Record<string, boolean | number | string[]>> = {};
   enabled = false;
 
-  setFlags(f: Record<string, Record<string, boolean | string[]>>) { this.flags = f; }
+  setFlags(f: Record<string, Record<string, boolean | number | string[]>>) { this.flags = f; }
 
   toggle(on: boolean) {
     this.enabled = on;

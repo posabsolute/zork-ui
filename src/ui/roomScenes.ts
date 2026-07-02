@@ -1110,7 +1110,7 @@ function kitchenPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
 //   GRATING-CLEARING : leavesMoved    (move the leaves → the grating is exposed)
 //   ENTRANCE-TO-HADES : spiritsGone   (exorcise the evil spirits)
 //   TORCH-ROOM    : torchTaken        (take the torch off the pedestal)
-type RoomFlags = { [k: string]: boolean | string[] };
+type RoomFlags = { [k: string]: boolean | number | string[] };
 export const roomState: Record<string, RoomFlags> = {
   "WEST-OF-HOUSE": { mailboxOpen: false },
   "EAST-OF-HOUSE": { windowOpen: false },
@@ -1133,8 +1133,9 @@ export const roomState: Record<string, RoomFlags> = {
   "SANDY-CAVE": { dug: false },
   "LOUD-ROOM": { echoFixed: false },
   "SHAFT-ROOM": { basketLowered: false }, // the basket on the chain (shared with LOWER-SHAFT)
+  "MAINTENANCE-ROOM": { leak: false, waterLevel: 0 }, // the blue button bursts a pipe; the room floods
 };
-export function setRoomFlag(room: string, key: string, val: boolean | string[]) { (roomState[room] ||= {})[key] = val; }
+export function setRoomFlag(room: string, key: string, val: boolean | number | string[]) { (roomState[room] ||= {})[key] = val; }
 function rf(room: string, key: string): boolean { return roomState[room]?.[key] === true; }
 function treasuresOf(room: string): string[] { const v = roomState[room]?.treasures; return Array.isArray(v) ? v : []; }
 // contents-driven props: a prop is drawn only while its object really is in the
@@ -2172,13 +2173,23 @@ function damLobbyPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: n
     const floorY = interiorBackdrop(p, pw, ph, { wallTop: [56, 56, 60], wallBot: [34, 34, 38], floorTop: [62, 60, 58], floorBot: [32, 31, 30], floorHi: [80, 78, 76], plank: "#26252a", seam: "#1a1a1e", light: { x: pw * 0.5, y: ph * 0.3, rx: pw * 0.85, ry: ph, col: [170, 175, 185], peak: 0.4 } }, t);
     // two doorways marked "Private" (north + east)
     for (const fx of [0.24, 0.86]) { const x = Math.round(pw * fx); darkArch(p, x - Math.round(pw * 0.05), Math.round(ph * 0.2), Math.round(pw * 0.1), Math.round(ph * 0.4), "#6a6a72"); p.fillStyle = "#caa24a"; p.fillRect(x - 8, Math.round(ph * 0.16), 16, 2); p.fillStyle = "#7a6228"; p.fillRect(x - 8, Math.round(ph * 0.17), 16, 1); } // "PRIVATE" plates
-    // the visitors' display: a framed diagram of mighty FCD#3
-    const dxp = Math.round(pw * 0.52), dyp = Math.round(ph * 0.22), dwp = 46, dhp = 26;
-    p.fillStyle = "#3a3e44"; p.fillRect(dxp - 2, dyp - 2, dwp + 4, dhp + 4); p.fillStyle = "#14181e"; p.fillRect(dxp, dyp, dwp, dhp); // frame + field
-    p.fillStyle = "#46586a"; p.fillRect(dxp + 3, dyp + 4, dwp - 6, 6); // the reservoir, in diagram blue
-    p.fillStyle = "#8a8e9a"; for (let yy = 0; yy < 12; yy++) p.fillRect(dxp + 18 - (yy >> 2), dyp + 10 + yy, 8 + (yy >> 1), 1); // the dam wedge
-    p.fillStyle = "#5a7a96"; p.fillRect(dxp + 30, dyp + 18, dwp - 33, 3); // the river below
-    p.fillStyle = "#caa24a"; p.fillRect(dxp + 4, dyp + dhp - 5, 14, 2); // caption bar
+    // the visitors' display: a framed tour poster of mighty FCD#3
+    const dxp = Math.round(pw * 0.52), dyp = Math.round(ph * 0.2), dwp = 52, dhp = 30;
+    p.fillStyle = "#181a20"; p.fillRect(dxp - 1, dyp + dhp + 2, dwp + 4, 2); // cast shadow under the frame
+    p.fillStyle = "#6a5a34"; p.fillRect(dxp - 2, dyp - 2, dwp + 4, dhp + 4); // brass frame
+    p.fillStyle = "#8a7648"; p.fillRect(dxp - 2, dyp - 2, dwp + 4, 1); p.fillRect(dxp - 2, dyp - 2, 1, dhp + 4); // lit bevel
+    p.fillStyle = "#3a2f1c"; p.fillRect(dxp - 2, dyp + dhp + 1, dwp + 4, 1); p.fillRect(dxp + dwp + 1, dyp - 2, 1, dhp + 4); // shadow bevel
+    for (let yy = 0; yy < 8; yy++) { p.fillStyle = yy < 4 ? "#2a3450" : "#38466a"; p.fillRect(dxp, dyp + yy, dwp, 1); } // dusk sky bands
+    p.fillStyle = "#caa24a"; p.fillRect(dxp + 3, dyp + 2, 17, 2); p.fillRect(dxp + 3, dyp + 5, 11, 1); // poster title lines, tour-brochure gold
+    p.fillStyle = "#46586a"; p.fillRect(dxp, dyp + 8, dwp, 5); // the reservoir behind the dam
+    p.fillStyle = "#5c7286"; for (let x = 1; x < dwp - 1; x += 3) if ((x >> 1) & 1) p.fillRect(dxp + x, dyp + 9, 2, 1); // still-water glints
+    for (let yy = 13; yy < 26; yy++) for (let x = 0; x < dwp; x++) { p.fillStyle = hash(x, yy) > 0.6 ? "#7e6e4c" : "#6e5f42"; p.fillRect(dxp + x, dyp + yy, 1, 1); } // canyon rock flanking the dam
+    p.fillStyle = "#aab0b8"; p.fillRect(dxp + 6, dyp + 13, dwp - 12, 2); // the crest road, catching the light
+    for (let yy = 0; yy < 10; yy++) { p.fillStyle = yy < 5 ? "#868d96" : "#6e757e"; p.fillRect(dxp + 7 + (yy >> 1), dyp + 15 + yy, dwp - 14 - yy, 1); } // the concrete face, battered inward
+    p.fillStyle = "#4c535c"; for (let g = 0; g < 4; g++) p.fillRect(dxp + 12 + g * 8, dyp + 15, 2, 6); // sluice gates in shadow
+    p.fillStyle = "#dfe8ee"; p.fillRect(dxp + 20, dyp + 18, 3, 7); p.fillStyle = "#b9cdd9"; p.fillRect(dxp + 21, dyp + 22, 2, 3); // one gate spilling a white ribbon
+    p.fillStyle = "#5a7a96"; p.fillRect(dxp, dyp + 26, dwp, 4); // the river reach below
+    p.fillStyle = "#7e9cb6"; p.fillRect(dxp + 17, dyp + 26, 9, 1); p.fillRect(dxp + 30, dyp + 27, 6, 1); // churn where the spill lands
     // the tour table: guidebooks in a rack + the matchbook
     const tx2 = Math.round(pw * 0.5), ty2 = floorY + Math.round((ph - floorY) * 0.35);
     p.fillStyle = "#101216"; p.fillRect(tx2 - 21, ty2 - 1, 42, 4);
@@ -3159,7 +3170,40 @@ function maintenanceRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: numbe
     if (hasObj("MAINTENANCE-ROOM", "WRENCH")) { p.fillStyle = "#7a8a92"; p.fillRect(px + 14, floorY + Math.round((ph - floorY) * 0.4), 10, 2); p.fillRect(px + 22, floorY + Math.round((ph - floorY) * 0.4) - 1, 2, 4); } // wrench with jaw
     if (hasObj("MAINTENANCE-ROOM", "SCREWDRIVER")) { p.fillStyle = "#6a5030"; p.fillRect(px - 24, floorY + Math.round((ph - floorY) * 0.55), 8, 2); p.fillStyle = "#9aa4ac"; p.fillRect(px - 16, floorY + Math.round((ph - floorY) * 0.55), 4, 1); } // screwdriver, handle + shank
     if (hasObj("MAINTENANCE-ROOM", "TUBE")) { p.fillStyle = "#4a5a3a"; p.fillRect(px - 4, floorY + Math.round((ph - floorY) * 0.62), 7, 3); p.fillStyle = "#5c7048"; p.fillRect(px - 4, floorY + Math.round((ph - floorY) * 0.62), 7, 1); } // the tube of viscous material
-    void t;
+    // THE BLUE BUTTON: a pipe bursts on the east wall and the room floods,
+    // the pool climbing with the game's "water level is now up to your …" turns
+    const lvv = roomState["MAINTENANCE-ROOM"]?.waterLevel;
+    const lvl = typeof lvv === "number" ? Math.min(7, lvv) : 0;
+    const leak = rf("MAINTENANCE-ROOM", "leak");
+    if (leak || lvl > 0) {
+      const waterY = ph - 2 - Math.round((ph - floorY + 4) * Math.max(1, lvl) / 7);
+      // the pool: two committed teals dithered at the depth seam, drowning the floor
+      for (let y = waterY; y < ph; y++) for (let x = 0; x < pw; x++) {
+        const deep = (y - waterY) / Math.max(1, ph - waterY);
+        p.fillStyle = deep + (dth(x, y) - 0.5) * 0.3 > 0.45 ? "#0d2f38" : "#154551";
+        p.fillRect(x, y, 1, 1);
+      }
+      p.fillStyle = "#2e7a8c"; p.fillRect(0, waterY, pw, 1); // the surface line
+      for (let x = 0; x < pw; x += 2) if (Math.sin(x * 0.31 + t * 2.2) > 0.72) { p.fillStyle = "#9fd8e4"; p.fillRect(x, waterY, 2, 1); } // sliding lamplight glints
+      if (leak) {
+        // the split pipe collar high on the east wall + the pressure jet arcing down
+        const oy = Math.round(lay.by0 + (floorY - lay.by0) * 0.45);
+        p.fillStyle = "#31363e"; p.fillRect(pw - 7, oy - 4, 7, 9);
+        p.fillStyle = "#4a515b"; p.fillRect(pw - 7, oy - 4, 7, 1); // lit rim
+        p.fillStyle = "#0c0e12"; p.fillRect(pw - 8, oy - 1, 2, 4); // the rupture
+        for (let i = 0; i < 60; i++) {
+          const jx = pw - 8 - i;
+          const jy = oy + Math.round(i * i * 0.014) + (hash(i, Math.floor(t * 9)) > 0.6 ? 1 : 0);
+          if (jy >= waterY) { // churning foam where the jet lands
+            for (let s = -3; s <= 3; s++) if (hash(i + s, Math.floor(t * 7)) > 0.5) { p.fillStyle = "#e8f6fa"; p.fillRect(jx + s, waterY - 1 + (s & 1), 1, 1); }
+            break;
+          }
+          p.fillStyle = i < 5 ? "#eef8fb" : i < 22 ? "#b9e2ec" : "#8cc6d6";
+          p.fillRect(jx, jy, 2, 2);
+          if (hash(i * 3, Math.floor(t * 11)) > 0.8) { p.fillStyle = "#cfeaf2"; p.fillRect(jx + 1, jy + 3, 1, 1); } // stray spray
+        }
+      }
+    }
   });
 }
 function squeekyRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {

@@ -147,6 +147,11 @@ function detectInteractions(cmd: string, fresh: string): boolean {
   // THE MAGIC BOAT: pumped up at the dam base
   if (/(boat|plastic).*inflate|inflates|seaworthy/i.test(fresh) && /^(?:inflate|pump)/.test(cmd)) setRoomFlag("DAM-BASE", "boatInflated", true);
   if (/^deflate/.test(cmd) && /deflate/i.test(fresh)) setRoomFlag("DAM-BASE", "boatInflated", false);
+  // MAINTENANCE-ROOM: the blue button bursts a pipe; the flood climbs turn by turn
+  if (/leak has occurred in a pipe|water appears to burst/i.test(fresh)) { setRoomFlag("MAINTENANCE-ROOM", "leak", true); setRoomFlag("MAINTENANCE-ROOM", "waterLevel", 1); }
+  const wl = fresh.match(/water level here is now up to your\s+(ankles?|shins?|knees?|hips?|waist|chest|neck)/i);
+  if (wl) setRoomFlag("MAINTENANCE-ROOM", "waterLevel", ["ankle", "shin", "knee", "hip", "waist", "chest", "neck"].indexOf(wl[1].toLowerCase().replace(/s$/, "")) + 1);
+  if (/stop(?:ped)?\s+the\s+leak|leak\s+(?:has been|is)\s+(?:fixed|repaired)/i.test(fresh)) setRoomFlag("MAINTENANCE-ROOM", "leak", false); // gunk applied — the water stops rising
   // THE THIEF: when he wanders through and robs you, show him striding through the room
   if (/seedy-looking individual|abstracted some valuables|(?:thief|individual).*(?:wandered|wanders) through|just wandered through the room/i.test(fresh)) flashThief();
   const changed = was !== JSON.stringify(roomState);

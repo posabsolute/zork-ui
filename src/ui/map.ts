@@ -332,8 +332,8 @@ export class GameMap {
       const isHere = n.id === this.current, isSel = n.id === this.selected;
       p.fillStyle = "#02120a"; p.fillRect(bx - 2, by - 2, bw + 4, bh + 4); // paper shows through around the box
       if (isHere) { // crawler-style highlight: YOUR room is the inverted, glowing cell
-        p.fillStyle = pulse ? "#2f8a4a" : "#256e3b"; p.fillRect(bx - 3, by - 3, bw + 6, bh + 6); // soft phosphor bleed
-        p.fillStyle = pulse ? "#8affb0" : "#6fe89a"; p.fillRect(bx, by, bw, bh);
+        p.fillStyle = "#2f8a4a"; p.fillRect(bx - 3, by - 3, bw + 6, bh + 6); // soft phosphor bleed
+        p.fillStyle = "#8affb0"; p.fillRect(bx, by, bw, bh); // steady — the inverted box already says "you are here"
         p.fillStyle = "#eafff0";
         p.fillRect(bx, by, bw, 2); p.fillRect(bx, by + bh - 2, bw, 2); p.fillRect(bx, by, 2, bh); p.fillRect(bx + bw - 2, by, 2, bh);
       } else {
