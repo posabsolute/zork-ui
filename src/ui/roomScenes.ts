@@ -2915,27 +2915,34 @@ function cellarPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: num
     const dwx = Math.round((bx0 + bx1) / 2), dw = Math.round((bx1 - bx0) * 0.22), dh = Math.round((by1 - by0) * 0.7);
     p.fillStyle = "#4a4e56"; p.fillRect(dwx - dw / 2 - 2, by1 - dh - 2, dw + 4, dh + 2); // stone lintel/jambs
     p.fillStyle = "#050608"; p.fillRect(dwx - dw / 2, by1 - dh, dw, dh); // the dark passage
-    // the steep metal ramp on the WEST — the slide's smooth run-out leaning UP the
-    // left wall into the dark. A chute, not a staircase: no treads, nothing to climb.
-    const fy = by1 + Math.round((ph - by1) * 0.5), fx = Math.round(pw * 0.2); // its foot rests ON the floor
-    const ty2 = by0 + Math.round((by1 - by0) * 0.08), tx2 = 0; // vanishing high on the wall
-    p.fillStyle = "#14161a"; p.fillRect(fx - 13, fy + 3, 30, 2); // cast shadow at the foot
-    for (let y = ty2; y <= fy; y++) {
-      const f = (y - ty2) / (fy - ty2);
-      const cx2 = Math.round(tx2 + (fx - tx2) * f), half = 5 + Math.round(f * 6); // widens toward the viewer
-      p.fillStyle = "#4c525b"; p.fillRect(cx2 - half, y, half * 2, 1); // sheet-metal bed
-      p.fillStyle = "#6a707a"; p.fillRect(cx2 + half - 2, y, 2, 1); // lamp-lit right rail
-      p.fillStyle = "#2e3238"; p.fillRect(cx2 - half, y, 2, 1); // shadowed left rail
+    // the trap door overhead, tucked into the ceiling's west edge — the way you
+    // came in, and the door that slammed. The metal ramp climbs the west wall
+    // and meets it: one structure, floor to hatch.
+    const tdOpen = rf("LIVING-ROOM", "trapOpen");
+    const cu0 = Math.round(by0 * 0.40), cu1 = Math.round(by0 * 0.78);
+    // the rail: from the flagstones up the west wall to the hatch's near corner
+    const rx0 = 2, ry0 = Math.round(ph * 0.78);
+    const rx1 = Math.round(bx0 * ((cu0 + cu1) / 2 / by0)), ry1 = Math.round((cu0 + cu1) / 2);
+    for (let x = rx0; x <= rx1; x++) {
+      const f = (x - rx0) / Math.max(1, rx1 - rx0), y = Math.round(ry0 + (ry1 - ry0) * f);
+      p.fillStyle = "#7a828c"; p.fillRect(x, y, 1, 1); // lit crown of the upper rail
+      p.fillStyle = "#4c525b"; p.fillRect(x, y + 1, 1, 1);
+      p.fillStyle = "#3a3e45"; p.fillRect(x, y + 6, 1, 2); // lower rail, in shade
     }
-    for (const off of [-3, 2]) for (let y = ty2 + 4; y < fy - 2; y++) { const f = (y - ty2) / (fy - ty2); const cx2 = Math.round(tx2 + (fx - tx2) * f); if (hash(y, off + 9) > 0.3) { p.fillStyle = "#7e858f"; p.fillRect(cx2 + off, y, 1, 1); } } // long streaks buffed by ten thousand landings
-    for (let y = ty2 + 3; y < fy; y += 6) { const f = (y - ty2) / (fy - ty2); const cx2 = Math.round(tx2 + (fx - tx2) * f), half = 5 + Math.round(f * 6); p.fillStyle = "#9aa0aa"; p.fillRect(cx2 + half - 1, y, 1, 1); } // rivets up the rail
-    p.fillStyle = "#565b63"; p.fillRect(fx - 12, fy + 1, 26, 3); p.fillStyle = "#787d86"; p.fillRect(fx - 12, fy + 1, 26, 1); // the flared landing lip
+    for (let y = cu0; y <= cu1; y++) {
+      const u = y / by0;
+      const xl = Math.round(bx0 * u), xr = Math.round(pw + (bx1 - pw) * u);
+      const rowL = xl + Math.round((xr - xl) * 0.02), rowR = xl + Math.round((xr - xl) * 0.22);
+      if (tdOpen) { p.fillStyle = "#040302"; p.fillRect(rowL, y, rowR - rowL, 1); } // thrown back — a hole into the house above
+      else for (let x = rowL; x < rowR; x++) { const s = (x - xl) / Math.max(1, xr - xl); p.fillStyle = Math.floor((s - 0.30) / 0.05) % 2 ? "#2a2013" : "#221a0f"; p.fillRect(x, y, 1, 1); } // shut wooden planks
+      p.fillStyle = tdOpen ? "#6a5124" : "#3a3e46"; p.fillRect(rowL - 1, y, 1, 1); p.fillRect(rowR, y, 1, 1); // frame (warm-lit when open)
+      if (y === cu0 || y === cu1) { p.fillStyle = tdOpen ? "#6a5124" : "#3a3e46"; p.fillRect(rowL - 1, y, rowR - rowL + 2, 1); }
+    }
     // the low crawlway SOUTH — a small dark hole at the front of the floor
     p.fillStyle = "#43474e"; p.fillRect(Math.round(pw * 0.5) - Math.round(pw * 0.09), ph - Math.round(ph * 0.1) - 1, Math.round(pw * 0.18), 2);
     p.fillStyle = "#050608"; p.fillRect(Math.round(pw * 0.5) - Math.round(pw * 0.08), ph - Math.round(ph * 0.1), Math.round(pw * 0.16), Math.round(ph * 0.1));
     // puddles glinting on the flagstones + slow drips
     p.fillStyle = "#34505e"; for (let i = 0; i < 5; i++) { const px = Math.round(pw * (0.34 + hash(i, 2) * 0.5)), py = by1 + Math.round((ph - by1) * (0.4 + hash(i, 3) * 0.5)); p.fillRect(px, py, 5, 1); p.fillStyle = "#4e7283"; p.fillRect(px + 1, py, 2, 1); p.fillStyle = "#34505e"; }
-    p.fillStyle = "#9ac0d4"; for (let i = 0; i < 4; i++) { const dx2 = bx0 + Math.round(hash(i, 8) * (bx1 - bx0)), drip = by0 + (t * 24 + i * 40) % (by1 - by0); p.fillRect(dx2, Math.round(drip), 1, 2); }
     ambiance(p, pw, ph, t, { x: pw * 0.5, y: ph * 0.92, peak: 0.7 });
   });
 }
