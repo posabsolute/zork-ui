@@ -182,9 +182,69 @@ function applyScene(room: any, enteredFrom?: string) {
   shownDark = darkNow;
 }
 
+// Room-specific clues for the treasure rooms and the harder puzzles. Each entry
+// may return null when its puzzle is already solved / treasure taken, so the
+// command falls back to the general progression nudge.
+function roomStillHas(room: string, id: string): boolean {
+  const v = roomState[room]?.objects;
+  return !Array.isArray(v) || (v as string[]).includes(id);
+}
+function flagOn(room: string, key: string): boolean { return roomState[room]?.[key] === true; }
+const MAZE_CLUE = () => "These twisty passages all look alike — drop an item in each room to tell them apart. Somewhere in here a luckless adventurer left his coins, his keys... and himself.";
+const ROOM_CLUES: Record<string, () => string | null> = {
+  // --- treasures ---
+  "GALLERY": () => roomStillHas("GALLERY", "PAINTING") ? "That painting is one of the nineteen treasures. TAKE PAINTING — its true home is the trophy case." : null,
+  "UP-A-TREE": () => roomStillHas("UP-A-TREE", "EGG") ? "The nest cradles a jewelled egg. Take it — but DON'T force it open; only one pair of hands in the Empire is deft enough, and they belong to someone who steals things." : null,
+  "LOUD-ROOM": () => flagOn("LOUD-ROOM", "echoFixed") ? (roomStillHas("LOUD-ROOM", "BAR") ? "Now the bar is yours to take." : null) : "The room roars your words back at you. Answer it in kind — say the word the room itself keeps saying.",
+  "TORCH-ROOM": () => roomStillHas("TORCH-ROOM", "TORCH") ? "The ivory torch is both treasure AND light — take it and save your lantern's batteries. (Getting down here needed a rope tied to the dome railing above.)" : null,
+  "EGYPT-ROOM": () => roomStillHas("EGYPT-ROOM", "COFFIN") ? "The gold coffin is a treasure, and so is what rattles inside it. It's far too heavy for climbing — carry it out through the temple, and remember that prayers at the altar are answered." : null,
+  "END-OF-RAINBOW": () => flagOn("END-OF-RAINBOW", "rainbowSolid") ? (roomStillHas("END-OF-RAINBOW", "POT-OF-GOLD") ? "The pot of gold sits at the rainbow's foot. Take it." : null) : "Every rainbow has a pot of gold — this one just needs convincing. A certain sceptre from a certain coffin, waved right here, works wonders.",
+  "ARAGAIN-FALLS": () => "The rainbow springs from these falls. If you carry the sceptre from the coffin, wave it and see what firms up.",
+  "ATLANTIS-ROOM": () => roomStillHas("ATLANTIS-ROOM", "TRIDENT") ? "The crystal trident of Poseidon, no less. Take it for the case." : null,
+  "RESERVOIR": () => roomStillHas("RESERVOIR", "TRUNK") ? "A trunk of jewels lies drowned in the mud — it only surfaces when the reservoir drains. Open the dam's gates and come back when the waters fall." : null,
+  "LAND-OF-LIVING-DEAD": () => roomStillHas("LAND-OF-LIVING-DEAD", "SKULL") ? "The crystal skull gleams among the bones — the hard part was getting past the spirits at the gate." : null,
+  "BAT-ROOM": () => "The vampire bat will carry you off somewhere dreadful — unless you carry something that offends its nose. Garlic, say. The jade figurine is safe to take once the bat keeps its distance.",
+  "GAS-ROOM": () => "SMELL that? One open flame — torch, candles, match — and they'll bury what's left of you in a matchbox. Carry only the lantern past here. The sapphire bracelet is the reward for caution.",
+  "MACHINE-ROOM": () => "That machine looks like a giant dryer with a lid. Put a lump of coal inside, close it, and turn the switch — with a screwdriver, not fingers. Pressure makes diamonds.",
+  "MAZE-5": () => "A skeleton, some keys, a bag of coins. The coins are treasure; the skeleton key opens a grating somewhere above your head. Disturb the bones at your peril.",
+  "TREASURE-ROOM": () => "The thief's den — every treasure he's lifted ends up here, plus his silver chalice. He fights best against the armed and worst against the generous: things GIVEN to him occupy his hands. The nasty knife bites deepest.",
+  "SANDY-CAVE": () => flagOn("SANDY-CAVE", "dug") ? null : "The sand is hiding something with wings and a shine. DIG WITH SHOVEL — and know when to stop digging; the sand takes greedy diggers.",
+  "RIVER-4": () => "That red buoy bobbing past isn't just a channel marker. Take it aboard and open it once you're ashore — gently, it's carrying something precious.",
+  // --- the harder puzzles along the way ---
+  "CELLAR": () => "Hear the trap door slam? Someone down here doesn't like visitors using it. There are other ways back to the surface — find them, and one day the door will stay open.",
+  "STUDIO": () => "That chimney is climbable — barely. It takes you up to the kitchen, but only with your hands nearly empty: the lamp and one small thing, no more.",
+  "TROLL-ROOM": () => flagOn("TROLL-ROOM", "trollDead") ? null : "The troll respects exactly one form of diplomacy: ATTACK TROLL WITH SWORD, repeated with feeling.",
+  "DOME-ROOM": () => flagOn("DOME-ROOM", "ropeTied") ? null : "A railing, a long drop, and that coil of rope from the attic. TIE ROPE TO RAILING and climb down into the dark below.",
+  "NORTH-TEMPLE": () => "Take the brass bell. Bell, book and candle — an old recipe for driving out evil. You'll want all three ingredients before visiting the gates of Hades.",
+  "SOUTH-TEMPLE": () => "Take the candles and the black book from the altar. And keep this place in mind: if you're ever carrying something too heavy to climb with, kneel here and PRAY.",
+  "ENTRANCE-TO-HADES": () => flagOn("ENTRANCE-TO-HADES", "spiritsGone") ? null : "The spirits bar your way, but ceremony moves them: RING BELL, then light the candles (a match helps), then READ BOOK. In that order, and briskly.",
+  "DAM-ROOM": () => "The great bolt turns with the wrench — but only after the dam's control bubble glows. Something in the maintenance room wakes it up. A yellow something.",
+  "MAINTENANCE-ROOM": () => "Four buttons: one wakes the dam controls, one toggles the lights, and one bursts a pipe and floods the room to your neck. The YELLOW one is your friend. The blue one is not.",
+  "DAM-BASE": () => flagOn("DAM-BASE", "boatInflated") ? "Board the boat and launch — but nothing sharp comes aboard, unless you like swimming in white water." : "That pile of plastic is a boat in denial. The hand pump from the reservoir's north side inflates it. Then: nothing sharp aboard.",
+  "SHAFT-ROOM": () => "The chain and basket are a dumbwaiter for your gear. The crawl to the mine's bottom is too tight for baggage — LOAD the basket (torch included), LOWER BASKET, and travel light.",
+  "TIMBER-ROOM": () => "The passage west is barely a rabbit hole — drop EVERYTHING here and crawl through empty-handed. Your gear can meet you below by basket.",
+  "LOWER-SHAFT": () => "If you lowered the basket from the shaft room above, your gear is waiting in it here. The machine room nearby turns humble coal into something a jeweller would weep over.",
+  "CYCLOPS-ROOM": () => (flagOn("CYCLOPS-ROOM", "cyclopsGone") || flagOn("CYCLOPS-ROOM", "cyclopsAsleep")) ? null : "The cyclops is hungry, which is a problem, since you're food. Feed him a hot lunch and something to wash it down... or speak the name of the hero his father taught him to fear.",
+  "GRATING-ROOM": () => flagOn("GRATING-ROOM", "gratingOpen") ? null : "That grating opens onto daylight — if the leaves above are cleared and you hold a skeleton's key. UNLOCK GRATING WITH KEY, then open it.",
+  "GRATING-CLEARING": () => flagOn("GRATING-CLEARING", "leavesMoved") ? null : "Something metallic hides under that pile of leaves. MOVE LEAVES.",
+  "MIRROR-ROOM-1": () => "This mirror doesn't just reflect. TOUCH MIRROR and see where you end up.",
+  "MIRROR-ROOM-2": () => "This mirror doesn't just reflect. TOUCH MIRROR and see where you end up.",
+  "SLIDE-ROOM": () => "The slide is a fast, fun, strictly one-way trip down to the cellar. Don't ride it with unfinished business up here.",
+  "SANDY-BEACH": () => "A shovel on a beach is an invitation. Take it — the sandy cave nearby has an itch that needs scratching.",
+};
+
 // A spoiler-light "what next?" nudge based on how far the player has gotten
 // (which key rooms they've reached). Triggered by the hint/clue command.
 function nextClue(): string {
+  const here = currentRoom?.id as string | undefined;
+  if (here) {
+    const fn = ROOM_CLUES[here] ?? (/^MAZE-\d+$/.test(here) ? MAZE_CLUE : undefined);
+    const c = fn?.();
+    if (c) return "CLUE: " + c;
+  }
+  return nextClueGeneric();
+}
+function nextClueGeneric(): string {
   const v = gameMap ? gameMap.visited() : new Set<string>();
   const has = (id: string) => v.has(id);
   const reachedSide = has("EAST-OF-HOUSE") || has("NORTH-OF-HOUSE") || has("SOUTH-OF-HOUSE");
