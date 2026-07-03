@@ -177,7 +177,7 @@ async function startGame() {
   // Dev/verification: deterministic pixel-hash of every registered scene at a
   // fixed t — refactors must leave every hash identical. Runs a default pass,
   // then a flag-variant pass, restoring all touched flags afterwards.
-  (window as any).__hashScenes = (t = 1.234) => {
+  if (import.meta.env.DEV) (window as any).__hashScenes = (t = 1.234) => {
     const cv = document.createElement("canvas"); cv.width = 512; cv.height = 230;
     const cx = cv.getContext("2d", { willReadFrequently: true })!;
     const hashAll = () => {

@@ -1,6 +1,6 @@
 // scenes/rooms-forest.ts — the forest, clearings, and canyon above ground.
 
-import { hasObj, rf } from "./state.ts";
+import { hasObj, rf, isRainbowSolid } from "./state.ts";
 import { arches, canyonBackdrop, caveBackdrop, ditherGlow, dth, fgTreePixel, fillDisc, fireflies, forestBackdrop, hash, housePixel, litCave, mailboxPixel, pixelBackdrop, pixelCanopy, pixelPath, pixelStage, pixelTree, rainPixel, rainbowArc, ridge, sandBand, sp, treasureGlint, waterFill, waterfall, whiteCliff } from "./kit.ts";
 
 export function westOfHousePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -157,7 +157,7 @@ export function onRainbowPixel(ctx: CanvasRenderingContext2D, w: number, h: numb
     // a waterfall in the distance (Aragain Falls)
     waterfall(p, Math.round(pw * 0.7), Math.round(pw * 0.1), Math.round(ph * 0.18), Math.round(ph * 0.5), t);
     // the rainbow you stand upon — a broad band sweeping across, foreground as a road
-    const solid = rf("END-OF-RAINBOW", "rainbowSolid");
+    const solid = isRainbowSolid();
     const cols = ["#d8504a", "#e0913a", "#e8d24a", "#5ab85a", "#4a8ad8", "#6a4ad8", "#a04ad8"];
     for (let b = 0; b < 7; b++) { p.fillStyle = cols[b]; for (let x = 0; x < pw; x++) { const y = Math.round(ph * 0.7 + b * 4 + Math.sin(x * 0.012) * ph * 0.06); for (let yy = y; yy < y + 4; yy++) if ((solid ? 1.01 : 0.85) > dth(x, yy)) p.fillRect(x, yy, 1, 1); } }
     if (solid) { p.fillStyle = "#fff6d8"; for (let x = 0; x < pw; x += 2) if (hash(x, 7) > 0.55) p.fillRect(x, Math.round(ph * 0.7 + Math.sin(x * 0.012) * ph * 0.06) - 1, 1, 1); } // the walkable edge, hard and glinting
@@ -183,7 +183,7 @@ export function aragainFallsPixel(ctx: CanvasRenderingContext2D, w: number, h: n
       const f = (y - ph * 0.8) / (ph * 0.2), drift = Math.sin(x * 0.05 + t * 0.8) * 2;
       if ((0.3 + f * 0.45) > dth(x + Math.round(drift), y)) { p.fillStyle = f > 0.5 ? "#eaf2f8" : "#b8ccdc"; p.fillRect(x, y, 1, 1); }
     }
-    rainbowArc(p, pw, ph, rf("END-OF-RAINBOW", "rainbowSolid")); // the famous rainbow, spanning the falls
+    rainbowArc(p, pw, ph, isRainbowSolid()); // the famous rainbow, spanning the falls
     void t;
   });
 }
@@ -194,7 +194,7 @@ export function endOfRainbowPixel(ctx: CanvasRenderingContext2D, w: number, h: n
     whiteCliff(p, Math.round(pw * 0.84), pw, Math.round(ph * 0.08), Math.round(ph * 0.78)); // White Cliffs
     waterFill(p, pw, Math.round(ph * 0.5), Math.round(ph * 0.74), t, "#356a8c", "#234e6c"); // river
     sandBand(p, 0, pw, Math.round(ph * 0.74), ph); // rocky beach
-    const solid = rf("END-OF-RAINBOW", "rainbowSolid");
+    const solid = isRainbowSolid();
     const cols = ["#d8504a", "#e0913a", "#e8d24a", "#5ab85a", "#4a8ad8", "#6a4ad8", "#a04ad8"];
     for (let b = 0; b < 7; b++) { p.fillStyle = cols[b]; for (let a = Math.PI * 1.05; a < Math.PI * 1.5; a += 0.01) { const x = Math.round(pw * 1.05 + Math.cos(a) * (ph * 0.85 - b * 2.5)), y = Math.round(ph * 1.1 + Math.sin(a) * (ph * 0.85 - b * 2.5)); if (y >= 0 && y < ph && x >= 0 && x < pw && (solid ? 1.01 : 0.8) > dth(x, y)) p.fillRect(x, y, 1, 1); } } // rainbow east — solid once the sceptre is waved
     if (solid && hasObj("END-OF-RAINBOW", "POT-OF-GOLD")) {

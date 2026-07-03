@@ -53,3 +53,11 @@ export function treasuresOf(room: string): string[] { const v = roomState[room]?
 // contents-driven props: a prop is drawn only while its object really is in the
 // room. A room with no recorded contents yet defaults to PRESENT (first visit).
 export function hasObj(room: string, id: string): boolean { const v = roomState[room]?.objects; return !Array.isArray(v) || (v as string[]).includes(id); }
+
+// ── Shared world state ────────────────────────────────────────────────────
+// A few flags are WRITTEN in one room but READ by several. These accessors are
+// the only sanctioned way to read them across rooms, so the sharing is explicit
+// and grep-able instead of tribal knowledge.
+export const isRainbowSolid = () => rf("END-OF-RAINBOW", "rainbowSolid"); // read by End of Rainbow, Aragain Falls, On the Rainbow
+export const isTrapOpen = () => rf("LIVING-ROOM", "trapOpen");            // read by the Living Room rug AND the Cellar ceiling
+export const isBasketLowered = () => rf("SHAFT-ROOM", "basketLowered");   // read by the Shaft Room AND the Lower Shaft

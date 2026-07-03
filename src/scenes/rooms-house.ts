@@ -1,6 +1,6 @@
 // scenes/rooms-house.ts — the white house and the cellar beneath it.
 
-import { hasObj, rf, treasuresOf } from "./state.ts";
+import { hasObj, rf, treasuresOf, isTrapOpen } from "./state.ts";
 import { ambiance, builtRoom, caveBackdrop, cyclopsSprite, darkArch, ditherGlow, dth, exitsBox, fillDisc, gothicDoor, hash, interiorBackdrop, lanternIcon, litCave, orientalRug, pal0, pixelStage, stairsUp, stoneRoom, swordMounted, trapDoor, treasureIcon, trollSprite } from "./kit.ts";
 
 export function kitchenPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -151,7 +151,7 @@ export function livingRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: num
       orientalRug(p, rcx, rcy, Math.round(pw * 0.46), Math.round((ph - floorY) * 0.82));
     } else {
       orientalRug(p, Math.round(pw * 0.82), rcy, Math.round(pw * 0.22), Math.round((ph - floorY) * 0.66)); // bunched to one side
-      trapDoor(p, Math.round(pw * 0.46), rcy, rf("LIVING-ROOM", "trapOpen")); // the revealed trap door
+      trapDoor(p, Math.round(pw * 0.46), rcy, isTrapOpen()); // the revealed trap door
     }
     void t;
   });
@@ -336,7 +336,7 @@ export function cellarPixel(ctx: CanvasRenderingContext2D, w: number, h: number,
     // the trap door overhead, tucked into the ceiling's west edge — the way you
     // came in, and the door that slammed. The metal ramp climbs the west wall
     // and meets it: one structure, floor to hatch.
-    const tdOpen = rf("LIVING-ROOM", "trapOpen");
+    const tdOpen = isTrapOpen();
     const cu0 = Math.round(by0 * 0.40), cu1 = Math.round(by0 * 0.78);
     // the rail: its FOOT stands on the wall-floor junction, and it leans up the
     // west wall to the hatch — a steep straight run, planted, not painted on

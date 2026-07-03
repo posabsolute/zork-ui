@@ -25,7 +25,7 @@ at low resolution.
 
 ```
 pixelStage(ctx, w, h, 256, (p, pw, ph) => { /* draw here, in pixel space */ });
-// see src/ui/roomScenes.ts: _pbuf offscreen canvas + nearest-neighbour upscale
+// see src/scenes/kit.ts: _pbuf offscreen canvas + nearest-neighbour upscale
 ```
 
 Consequences that follow from this:
@@ -118,7 +118,7 @@ one-point-perspective box:
   point). The perspective floor grid is what most sells the room.
 - cut **exits into the planes** (a dark doorway in the back wall, a hole in the
   floor) rather than floating arches.
-Reference: `stoneRoom()` / `builtRoom()` + `STONE_PALS` in roomScenes.ts (the
+Reference: `stoneRoom()` / `builtRoom()` + `STONE_PALS` in src/scenes/kit.ts (the
 Cellar). Keep `caveBackdrop` for natural caves/mines only.
 
 ## Texture every surface — and texture follows FORM
@@ -153,7 +153,7 @@ game-meaningful elements must match the room's actual text.**
 
 ## Interactive state — scenes are game UI, not paintings
 
-Rooms have PER-ROOM flags in `roomState` (roomScenes.ts, with a comment block
+Rooms have PER-ROOM flags in `roomState` (src/scenes/state.ts, with a comment block
 listing every flag: `trapOpen`, `rugMoved`, `trollDead`, `gatesOpen`,
 `drained`, `coffinOpen`, `ropeTied`, `leavesMoved`, `torchTaken`, …). Scene
 functions read them via `rf(room, key)` / `treasuresOf(room)`; the game engine
@@ -231,7 +231,7 @@ For IMPROVING an existing scene:
 ## Anti-patterns (what made earlier attempts fail)
 
 - ❌ Glowing vector outlines / `S`/`F`/`neon` strokes (the legacy helpers at the
-  top of roomScenes.ts) → rejected as childish. Never use them in scenes.
+  legacy vector era) → rejected as childish. Never use them in scenes.
 - ❌ Flat filled silhouettes with no texture → also read as a drawing.
 - ❌ Rendering at full res + soft blur "glow" → not retro; render small instead.
 - ❌ `imageSmoothingEnabled` left true → mushy, kills the whole effect.
@@ -255,34 +255,38 @@ For IMPROVING an existing scene:
 
 ## Implementation reference (this project — current architecture)
 
-`src/ui/roomScenes.ts` (~2400 lines), driven by `src/ui/scene2d.ts`'s rAF loop
-calling a `SceneDraw(ctx, w, h, t)`.
+The scenes live in `src/scenes/` (split by role and game region), driven by
+`src/ui/scene2d.ts`'s rAF loop calling a `SceneDraw(ctx, w, h, t)`.
+`src/ui/roomScenes.ts` is only a re-export shim for old import paths.
 
-- **Entry**: `getRoomScene(room, objects)` → looks up `SCENES[room.id]`
-  (hand-built scenes) or falls back to `composeRoom()` (procedural: region +
-  ldesc keywords pick a scape, then `drawProp` scatters the room's objects).
-  A hand-built scene beats the fallback — promoting a room out of
-  `composeRoom` into `SCENES` is the standard improvement path.
-  `darknessScene` renders unlit rooms (pure black + grue eyes) — never
-  fabricate light the player doesn't have.
-- **Pixel core**: `pixelStage` (offscreen buffer + hard upscale), `dth`
-  (Bayer 4x4), `quant`, `mix`, `hash`, `sp`, `fillDisc`, `ditherGlow`.
-- **Shared scapes** (reuse, don't fork): `pixelBackdrop` (outdoor night: sky,
-  moon, ridge, ground), `forestBackdrop`, `interiorBackdrop` (house rooms),
-  `caveBackdrop` + `pickPal`/`litCave`/`lampPal`/`mazePal` (natural
-  underground), `stoneRoom`/`builtRoom` + `STONE_PALS` (man-made interiors),
-  `canyonBackdrop`, `riverBase`, `waterFill`, `waterfall`, `rainbowArc`.
-- **Structures/exits**: `housePixel` (the colonial, per-face opts),
-  `pixelPath`, `tunnel`, `darkArch`, `stairsUp`/`stairsDown`, `trapDoor`,
-  `exitsBox`, `drawExitsCave` + `DIRPOS` (exit affordances from room data).
-- **Props/creatures**: `drawProp` (name→sprite dispatch), `treasureGlint` +
-  `TREASURE` regex, `trollSprite`, `thiefSprite`/`flashThief`, `creature`,
-  `figureProp`, `mailboxPixel`, `fgTreePixel`, `pixelTree`, `rainPixel`.
-- **Interactive state**: `roomState` (flag table with a comment listing every
-  flag), `setRoomFlag`, `rf`, `treasuresOf` — see the Interactive state
-  section above.
-- **Legacy vector helpers** (`bg`, `S`, `F`, `neon`, `stars`, `moon`, …, lines
-  ~11-343): title-screen era. Do not use for room scenes.
+- **`src/scenes/index.ts`** — the `SCENES` registry (room id → scene fn),
+  `getRoomScene(room, objects)` (registry lookup, `composeRoom()` procedural
+  fallback — promoting a room out of `composeRoom` into `SCENES` is the
+  standard improvement path), `sceneIds()`, and `darknessScene` (pure black +
+  grue eyes — never fabricate light the player doesn't have).
+- **`src/scenes/kit.ts`** — the shared toolkit. Pixel core: `pixelStage`
+  (offscreen buffer + hard upscale), `dth` (Bayer 4x4), `quant`, `mix`,
+  `hash`, `fillDisc`, `ditherGlow`. Scapes (reuse, don't fork):
+  `pixelBackdrop`, `forestBackdrop`, `interiorBackdrop`, `caveBackdrop` +
+  `pickPal`/`litCave`/`lampPal`/`mazePal`, `stoneRoom`/`builtRoom` +
+  `STONE_PALS`, `canyonBackdrop`, `riverBase`, `waterfall`, `rainbowArc`.
+  Structures: `housePixel` (per-face opts), `pixelPath`, `tunnel`,
+  `darkArch`, `trapDoor`, `exitsBox`. Props/creatures: `treasureGlint`,
+  `trollSprite`, `thiefSprite`/`flashThief`, `figureProp`, `fgTreePixel`,
+  `rainPixel`. Anything used by scenes in two different region files lives
+  here.
+- **`src/scenes/rooms-{house,forest,dungeon,maze,river,mine,temple}.ts`** —
+  the per-room scene functions, grouped by the room's `region` in rooms.json
+  (house includes the cellar; temple includes hades).
+- **`src/scenes/state.ts`** — `roomState` (flag table with a comment listing
+  every flag), `setRoomFlag`, `rf`, `hasObj` (contents-driven props),
+  `treasuresOf`, and the shared cross-room accessors `isRainbowSolid` /
+  `isTrapOpen` / `isBasketLowered` (use these, not raw `rf`, when reading
+  another room's flag).
+- **Verification**: `npm run validate` fails the build on any room/object id
+  that isn't in the game data. In dev, `__hashScenes()` pixel-hashes all 110
+  scenes (default + flag-variant passes) — capture before a refactor,
+  compare after; hashes must be identical.
 - Verified examples: WEST/NORTH/SOUTH/EAST-OF-HOUSE (one backdrop + one
   configurable house varied per room text), `cellarPixel` (built box),
   `waterfall` (flow animation), `livingRoomPixel` (flag-heavy interior).

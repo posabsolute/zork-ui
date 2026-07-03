@@ -1,6 +1,6 @@
 // scenes/rooms-mine.ts — the coal mine, shafts, and the diamond machine.
 
-import { hasObj, rf } from "./state.ts";
+import { hasObj, rf, isBasketLowered } from "./state.ts";
 import { caveBackdrop, coalVeins, darkArch, dth, fillDisc, hash, lampPal, mineLadder, mineTimbers, pixelStage, rockStairs, treasureGlint } from "./kit.ts";
 
 export function mineEntrancePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -19,7 +19,7 @@ export function shaftRoomPixel(ctx: CanvasRenderingContext2D, w: number, h: numb
     const pal = lampPal("mine", pw, ph); const floorY = caveBackdrop(p, pw, ph, pal, t); const rim = `rgb(${pal.wallHi.join(",")})`;
     coalVeins(p, pw, floorY);
     const sx = Math.round(pw * 0.5), sw = Math.round(pw * 0.16), sy = floorY + Math.round((ph - floorY) * 0.2);
-    const x0 = sx - (sw >> 1), lowered = rf("SHAFT-ROOM", "basketLowered");
+    const x0 = sx - (sw >> 1), lowered = isBasketLowered();
     // the shaft: a recessed square pit — lamplit lip, walls stepping down into black
     p.fillStyle = "#5a5248"; p.fillRect(x0 - 2, sy - 2, sw + 4, 2); // worn stone lip
     p.fillStyle = "#2e2a24"; for (let y = sy; y < ph; y++) { const dpt = Math.min(1, (y - sy) / 14); const inw = Math.round(dpt * 4); const v = Math.round(26 * (1 - dpt)); p.fillStyle = `rgb(${v + 8},${v + 5},${v + 2})`; p.fillRect(x0 + inw, y, sw - inw * 2, 1); }
@@ -149,7 +149,7 @@ export function lowerShaftPixel(ctx: CanvasRenderingContext2D, w: number, h: num
     p.fillStyle = "#3a2c1a"; p.fillRect(sx - (sw >> 1) - 3, mouthY - 12, 3, 12); p.fillRect(sx + (sw >> 1), mouthY - 12, 3, 12); // side timbers
     const sway = Math.round(Math.sin(t * 0.8) * 1);
     p.fillStyle = "#8a8a92"; for (let y = 2; y < mouthY + 6; y += 3) p.fillRect(sx + sway, y, 1, 2); // the iron chain, swaying faintly
-    if (rf("SHAFT-ROOM", "basketLowered")) { // the basket has come all the way down
+    if (isBasketLowered()) { // the basket has come all the way down
       const by2 = mouthY + 14;
       p.fillStyle = "#8a8a92"; for (let y = mouthY + 6; y < by2 - 8; y += 3) p.fillRect(sx + sway, y, 1, 2);
       p.fillStyle = "#54402a"; p.fillRect(sx - 7 + sway, by2 - 8, 14, 8);
