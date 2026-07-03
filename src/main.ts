@@ -249,15 +249,15 @@ function nextClueGeneric(): string {
   const has = (id: string) => v.has(id);
   const reachedSide = has("EAST-OF-HOUSE") || has("NORTH-OF-HOUSE") || has("SOUTH-OF-HOUSE");
   const steps: [boolean, string][] = [
-    [!reachedSide && !has("KITCHEN"), "Open the mailbox and read the leaflet. The front door is boarded — walk around the house (north or south) to look for another way in."],
-    [reachedSide && !has("KITCHEN"), "Go behind the house (to the east). The small window there is slightly ajar — OPEN WINDOW, then go WEST to climb inside."],
-    [has("KITCHEN") && !has("LIVING-ROOM"), "From the kitchen, go WEST into the living room."],
-    [has("LIVING-ROOM") && !has("CELLAR"), "In the living room: TAKE LANTERN and TAKE SWORD, MOVE the RUG to uncover a trap door, OPEN the TRAP DOOR, TURN ON the LANTERN, then go DOWN."],
-    [has("CELLAR") && !has("TROLL-ROOM"), "Keep the lamp lit and press on. A troll blocks the way ahead — be ready to ATTACK TROLL WITH SWORD."],
-    [has("TROLL-ROOM"), "Your quest: find the 19 treasures of the Great Underground Empire and put each in the TROPHY CASE in the living room. Explore with the lamp lit, beware the thief and the lurking grue, and use the map to find unexplored exits."],
+    [!reachedSide && !has("KITCHEN"), "Start with the mail — every adventure begins with paperwork. As for the house: a boarded front door is a promise that there's another way in. Walk around and find it."],
+    [reachedSide && !has("KITCHEN"), "Around the back of the house, one small window sits ajar — an inch of invitation. Push it the rest of the way open and climb through."],
+    [has("KITCHEN") && !has("LIVING-ROOM"), "The kitchen has been picked over already. The living room, just west of here, has not."],
+    [has("LIVING-ROOM") && !has("CELLAR"), "Everything an adventurer needs is in this one room: a lantern, an elvish sword, and — under that oriental rug — a door nobody wanted you to find. Light in hand, blade at hip, down you go."],
+    [has("CELLAR") && !has("TROLL-ROOM"), "Keep the lamp burning — the dark down here has an appetite. Somewhere ahead a troll collects tolls for his passage, and he only takes payment in steel."],
+    [has("TROLL-ROOM"), "The Empire holds nineteen treasures, and the trophy case upstairs keeps the score. Somewhere in the dark a thief is running the same errand, faster — and wherever your lamp doesn't reach, the grue is patient. The map quietly underlines every exit you haven't tried."],
   ];
   for (const [cond, msg] of steps) if (cond) return "CLUE: " + msg;
-  return "CLUE: Explore carefully with your lamp lit, gather treasures, and bring them back to the trophy case. Check the map for exits you haven't taken yet.";
+  return "CLUE: Lamp lit, eyes open. The treasures still out there won't announce themselves — but the map is underlining every exit you haven't taken.";
 }
 
 rooms.onChange((change) => {
