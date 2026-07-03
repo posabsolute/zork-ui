@@ -6,7 +6,7 @@
 
 ![West of House — the full interface: scene, terminal, and the adventurer's auto-map](docs/screenshots/hero-west-of-house.png)
 
-**Play it:** https://zork-ui-production.up.railway.app
+**Play it:** https://zork.arobase.co
 
 ## The idea: observe, never interfere
 
