@@ -4,63 +4,16 @@ import { RoomState } from "./engine/roomState.ts";
 import { Compass } from "./ui/compass.ts";
 import { startTitleScene } from "./ui/titleScene.ts";
 import { Scene2D } from "./ui/scene2d.ts";
-import { getRoomScene, darknessScene, roomState, setRoomFlag, flashThief } from "./ui/roomScenes.ts";
+import { getRoomScene, darknessScene, roomState, setRoomFlag, flashThief, sceneIds } from "./ui/roomScenes.ts";
 import { ambience } from "./audio/ambience.ts";
 import { GameMap } from "./ui/map.ts";
+import { applyTriggers } from "./game/triggers.ts";
+import { nextClue } from "./game/clues.ts";
+import { SLOT, SAVE_KEY, MAP_KEY, ROOMS_KEY, buildPlayers } from "./game/players.ts";
 
 const output = document.getElementById("output") as HTMLElement;
 const input = document.getElementById("input") as HTMLInputElement;
 
-// --- Multiple players: each save slot keeps its own game + map in localStorage.
-// Player "1" keeps the legacy (unslotted) keys so existing saves are preserved.
-const SLOT = localStorage.getItem("zork1:slot") || "1";
-const SAVE_KEY = SLOT === "1" ? "zork1:quetzal" : `zork1:quetzal:${SLOT}`;
-const MAP_KEY = SLOT === "1" ? "zork1:map" : `zork1:map:${SLOT}`;
-function buildPlayers() {
-  const host = document.getElementById("players"); if (!host) return;
-  const slots: string[] = JSON.parse(localStorage.getItem("zork1:slots") || '["1"]');
-  host.innerHTML = `<span class="pl-label">PLAYER</span>`;
-  for (const s of slots) {
-    const b = document.createElement("button");
-    b.className = "pl-btn" + (s === SLOT ? " on" : ""); b.textContent = s;
-    b.onclick = () => { if (s !== SLOT) { localStorage.setItem("zork1:slot", s); location.reload(); } };
-    host.appendChild(b);
-  }
-  const add = document.createElement("button");
-  add.className = "pl-btn pl-add"; add.textContent = "+"; add.title = "new player";
-  add.onclick = () => {
-    const next = String(Math.max(0, ...slots.map(Number)) + 1);
-    slots.push(next); localStorage.setItem("zork1:slots", JSON.stringify(slots));
-    localStorage.setItem("zork1:slot", next); location.reload();
-  };
-  host.appendChild(add);
-  // ambient sound toggle — ON by default (any first gesture unlocks the audio)
-  const snd = document.createElement("button");
-  const SND_KEY = SLOT === "1" ? "zork1:sound" : `zork1:sound:${SLOT}`;
-  const on = localStorage.getItem(SND_KEY) !== "0";
-  snd.className = "pl-btn pl-snd" + (on ? " on" : ""); snd.title = "ambient sound";
-  const paint = (v: boolean) => { snd.classList.toggle("on", v); snd.textContent = v ? "♪ ON" : "♪ OFF"; };
-  paint(on);
-  snd.onclick = () => {
-    const now = !ambience.enabled;
-    ambience.toggle(now); paint(now);
-    try { localStorage.setItem(SND_KEY, now ? "1" : "0"); } catch { /* quota */ }
-  };
-  host.appendChild(snd);
-  // MAP toggle — small screens only (CSS hides it on desktop, where the map is docked)
-  const map = document.createElement("button");
-  map.className = "pl-btn pl-map"; map.textContent = "MAP"; map.title = "toggle map";
-  map.onclick = (e) => {
-    e.stopPropagation(); // don't let the global click handler summon the keyboard
-    const open = document.body.classList.toggle("map-open");
-    map.textContent = open ? "CLOSE" : "MAP";
-  };
-  host.appendChild(map);
-  if (on) { // arm on the first gesture of the session (browser autoplay rules)
-    const arm = () => { ambience.toggle(true); paint(true); window.removeEventListener("pointerdown", arm); window.removeEventListener("keydown", arm); };
-    window.addEventListener("pointerdown", arm); window.addEventListener("keydown", arm);
-  }
-}
 buildPlayers();
 
 // The scene/compass come up immediately behind the welcome screen; the actual
@@ -78,84 +31,18 @@ let gameMap: GameMap | null = null;
 // interpreter's own light check), not a fragile attribute heuristic.
 let darkNow = false;
 let lastOutLen = 0;
-// Per-room interactive states, persisted per player (survives death/restart).
-const ROOMS_KEY = SLOT === "1" ? "zork1:rooms" : `zork1:rooms:${SLOT}`;
 try { const saved = JSON.parse(localStorage.getItem(ROOMS_KEY) || "{}"); for (const r in saved) for (const k in saved[r]) setRoomFlag(r, k, saved[r][k]); } catch { /* ignore */ }
 let lastCmd = "";
 
 // Read what the player just did and update the relevant ROOM's state, so its
 // scene reflects it. Returns true if anything changed (to trigger a re-render).
+// The interaction wiring lives in src/game/triggers.ts as a declarative table;
+// this wrapper adds the current room and persists any change.
 function detectInteractions(cmd: string, fresh: string): boolean {
-  if (!cmd) return false;
-  const ok = !/\b(can't|cannot|closed|won't|isn't|don't|nothing|no\b)/i.test(fresh);
-  const here = currentRoom?.id as string | undefined;
-  const was = JSON.stringify(roomState);
-  // LIVING-ROOM: rug / trap door / trophy case / treasures
-  if (/^(?:move|push|lift|slide)\s+(?:the\s+)?(?:oriental\s+)?rug\b/.test(cmd) && /trap\s*door|moved|reveal/i.test(fresh)) setRoomFlag("LIVING-ROOM", "rugMoved", true);
-  if (/^open\s+(?:the\s+)?trap\s*door\b/.test(cmd) && ok) setRoomFlag("LIVING-ROOM", "trapOpen", true);
-  if (/^close\s+(?:the\s+)?trap\s*door\b/.test(cmd)) setRoomFlag("LIVING-ROOM", "trapOpen", false);
-  if (/^open\s+(?:the\s+)?(?:trophy\s+)?case\b/.test(cmd) && /open/i.test(fresh)) setRoomFlag("LIVING-ROOM", "caseOpen", true);
-  if (/^close\s+(?:the\s+)?(?:trophy\s+)?case\b/.test(cmd)) setRoomFlag("LIVING-ROOM", "caseOpen", false);
-  const pm = cmd.match(/^(?:put|place)\s+(.+?)\s+(?:in|into)\s+(?:the\s+)?(?:trophy\s+)?case\b/);
-  if (pm && /\bdone\b/i.test(fresh) && ok) { const tn = pm[1].replace(/^(?:the|a|an)\s+/, "").trim(); const tr = roomState["LIVING-ROOM"].treasures as string[]; if (tn && !tr.includes(tn)) tr.push(tn); }
-  // WEST-OF-HOUSE: mailbox
-  if (/^open\s+(?:the\s+)?(?:small\s+)?mailbox\b/.test(cmd) && /open/i.test(fresh)) setRoomFlag("WEST-OF-HOUSE", "mailboxOpen", true);
-  if (/^close\s+(?:the\s+)?mailbox\b/.test(cmd)) setRoomFlag("WEST-OF-HOUSE", "mailboxOpen", false);
-  // window — belongs to whichever room you're in (Kitchen or Behind House)
-  if (here && /^open\s+(?:the\s+)?window\b/.test(cmd) && /open|allow entry/i.test(fresh)) setRoomFlag(here, "windowOpen", true);
-  if (here && /^close\s+(?:the\s+)?window\b/.test(cmd)) setRoomFlag(here, "windowOpen", false);
-  // CYCLOPS-ROOM / TROLL-ROOM / GRATING-ROOM / DAM-ROOM (driven by the output)
-  if (/cyclops/i.test(fresh) && /(flee|runs|run from|crashes|breaks?\s+(?:down\s+)?(?:through|the wall)|rush)/i.test(fresh)) setRoomFlag("CYCLOPS-ROOM", "cyclopsGone", true);
-  if (/troll/i.test(fresh) && /(dies|is dead|expire|slain|breathes his|disappear|defeated|killed)/i.test(fresh)) setRoomFlag("TROLL-ROOM", "trollDead", true);
-  if (/grating/i.test(fresh) && /(opens|is open|swings? (?:up|open))/i.test(fresh)) setRoomFlag("GRATING-ROOM", "gratingOpen", true);
-  if (/^close\s+(?:the\s+)?grating\b/.test(cmd)) setRoomFlag("GRATING-ROOM", "gratingOpen", false);
-  if (/sluice gates open|gates open and water/i.test(fresh)) setRoomFlag("DAM-ROOM", "gatesOpen", true);
-  if (/sluice gates? (?:close|are closed)|gates close/i.test(fresh)) setRoomFlag("DAM-ROOM", "gatesOpen", false);
-  // EGYPT-ROOM: the gold coffin
-  if (/^open\s+(?:the\s+)?(?:gold(?:en)?\s+)?coffin\b/.test(cmd) && /open/i.test(fresh)) setRoomFlag("EGYPT-ROOM", "coffinOpen", true);
-  if (/^close\s+(?:the\s+)?coffin\b/.test(cmd)) setRoomFlag("EGYPT-ROOM", "coffinOpen", false);
-  // RESERVOIR: drains when the dam gates are open (the water level falls)
-  if (/water level/i.test(fresh) && /(fall|drop|lower|empty|recede)/i.test(fresh)) setRoomFlag("RESERVOIR", "drained", true);
-  if ((/water level/i.test(fresh) && /(ris|fill)/i.test(fresh)) || /reservoir.*(fills|full again)/i.test(fresh)) setRoomFlag("RESERVOIR", "drained", false);
-  // MIRROR rooms: break the mirror (in whichever mirror room you're in)
-  if (here && /MIRROR-ROOM/.test(here) && /^(?:break|smash|hit|strike)\s+(?:the\s+)?mirror\b/.test(cmd) && /(shatter|breaks|smash|pieces|fragment)/i.test(fresh)) setRoomFlag(here, "broken", true);
-  // DOME-ROOM: tie the rope to the railing
-  if (/^tie\s+(?:the\s+)?rope\s+to\s+(?:the\s+)?railing\b/.test(cmd) && /(tie|attach|fasten|drop|secure)/i.test(fresh)) setRoomFlag("DOME-ROOM", "ropeTied", true);
-  // GRATING-CLEARING: rake the leaves off the grating
-  if (/^(?:move|push|rake)\s+(?:the\s+)?(?:pile of\s+)?leaves\b/.test(cmd) && /(grating|reveal|move)/i.test(fresh)) setRoomFlag("GRATING-CLEARING", "leavesMoved", true);
-  // ENTRANCE-TO-HADES: exorcise the spirits
-  if (/(spirits|ghosts)/i.test(fresh) && /(flee|scatter|banish|depart|vanish|recoil|driven|exorc)/i.test(fresh)) setRoomFlag("ENTRANCE-TO-HADES", "spiritsGone", true);
-  // TORCH-ROOM: take the torch off its pedestal
-  if (here === "TORCH-ROOM" && /^(?:take|get|grab|pick up)\s+(?:the\s+)?torch\b/.test(cmd) && /taken/i.test(fresh)) setRoomFlag("TORCH-ROOM", "torchTaken", true);
-  if (here === "TORCH-ROOM" && /^(?:drop|put)\s+(?:down\s+)?(?:the\s+)?torch\b/.test(cmd)) setRoomFlag("TORCH-ROOM", "torchTaken", false);
-  // SANDY-CAVE: dig in the sand (with the shovel) to uncover the scarab
-  if (here === "SANDY-CAVE" && /^dig\b/.test(cmd) && /(scarab|hole|uncover|reveal|sand)/i.test(fresh)) setRoomFlag("SANDY-CAVE", "dug", true);
-  // LOUD-ROOM: say "echo" to fix the deafening acoustics
-  if (here === "LOUD-ROOM" && /^echo\b/.test(cmd) && /(acoustic|echo|change|silent|stops?)/i.test(fresh)) setRoomFlag("LOUD-ROOM", "echoFixed", true);
-  // SHAFT-ROOM / LOWER-SHAFT: lower or raise the basket on the chain
-  if (/^lower\s+(?:the\s+)?basket\b/.test(cmd) && ok) setRoomFlag("SHAFT-ROOM", "basketLowered", true);
-  if (/^raise\s+(?:the\s+)?basket\b/.test(cmd) && ok) setRoomFlag("SHAFT-ROOM", "basketLowered", false);
-  // CYCLOPS: fed and watered, he falls asleep (fleeing through the wall overrides)
-  if (/cyclops/i.test(fresh) && /(asleep|falls? .*sleep|slumber|snor)/i.test(fresh)) setRoomFlag("CYCLOPS-ROOM", "cyclopsAsleep", true);
-  if (/cyclops/i.test(fresh) && /(wakes|awakens|yawns and stares)/i.test(fresh)) setRoomFlag("CYCLOPS-ROOM", "cyclopsAsleep", false);
-  // THE SCEPTRE: waved, the rainbow becomes solid (all three rainbow rooms read this key)
-  if (/rainbow.*(solid|walkable)/i.test(fresh)) setRoomFlag("END-OF-RAINBOW", "rainbowSolid", true);
-  if (/rainbow.*(run-of-the-mill|shimmer|insubstantial)/i.test(fresh)) setRoomFlag("END-OF-RAINBOW", "rainbowSolid", false);
-  // THE MAGIC BOAT: pumped up at the dam base
-  if (/(boat|plastic).*inflate|inflates|seaworthy/i.test(fresh) && /^(?:inflate|pump)/.test(cmd)) setRoomFlag("DAM-BASE", "boatInflated", true);
-  if (/^deflate/.test(cmd) && /deflate/i.test(fresh)) setRoomFlag("DAM-BASE", "boatInflated", false);
-  // MAINTENANCE-ROOM: the blue button bursts a pipe; the flood climbs turn by turn
-  if (/leak has occurred in a pipe|water appears to burst/i.test(fresh)) { setRoomFlag("MAINTENANCE-ROOM", "leak", true); setRoomFlag("MAINTENANCE-ROOM", "waterLevel", 1); }
-  const wl = fresh.match(/water level here is now up to your\s+(ankles?|shins?|knees?|hips?|waist|chest|neck)/i);
-  if (wl) setRoomFlag("MAINTENANCE-ROOM", "waterLevel", ["ankle", "shin", "knee", "hip", "waist", "chest", "neck"].indexOf(wl[1].toLowerCase().replace(/s$/, "")) + 1);
-  if (/stop(?:ped)?\s+the\s+leak|leak\s+(?:has been|is)\s+(?:fixed|repaired)/i.test(fresh)) setRoomFlag("MAINTENANCE-ROOM", "leak", false); // gunk applied — the water stops rising
-  // THE THIEF: when he wanders through and robs you, show him striding through the room
-  if (/seedy-looking individual|abstracted some valuables|(?:thief|individual).*(?:wandered|wanders) through|just wandered through the room/i.test(fresh)) flashThief();
-  const changed = was !== JSON.stringify(roomState);
+  const changed = applyTriggers(cmd, fresh, currentRoom?.id as string | undefined);
   if (changed) try { localStorage.setItem(ROOMS_KEY, JSON.stringify(roomState)); } catch { /* quota */ }
   return changed;
 }
-
 function autosave() {
   if (!gameRef) return;
   try {
@@ -176,84 +63,6 @@ function applyScene(room: any, _enteredFrom?: string) {
   if (darkNow) scene2d.show(darknessScene);
   else scene2d.show(scene ?? darknessScene); // no scene should be impossible; fail dark, never blank
   shownDark = darkNow;
-}
-
-// Room-specific clues for the treasure rooms and the harder puzzles. Each entry
-// may return null when its puzzle is already solved / treasure taken, so the
-// command falls back to the general progression nudge.
-function roomStillHas(room: string, id: string): boolean {
-  const v = roomState[room]?.objects;
-  return !Array.isArray(v) || (v as string[]).includes(id);
-}
-function flagOn(room: string, key: string): boolean { return roomState[room]?.[key] === true; }
-const MAZE_CLUE = () => "These twisty passages all look alike — drop an item in each room to tell them apart. Somewhere in here a luckless adventurer left his coins, his keys... and himself.";
-const ROOM_CLUES: Record<string, () => string | null> = {
-  // --- treasures ---
-  "GALLERY": () => roomStillHas("GALLERY", "PAINTING") ? "A gallery a hundred feet underground, and the security is just you, your conscience, and the dark. The painting would look better over your trophy case anyway." : null,
-  "UP-A-TREE": () => roomStillHas("UP-A-TREE", "EGG") ? "The nest cradles a jewelled egg. Take it — but DON'T force it open; only one pair of hands in the Empire is deft enough, and they belong to someone who steals things." : null,
-  "LOUD-ROOM": () => flagOn("LOUD-ROOM", "echoFixed") ? (roomStillHas("LOUD-ROOM", "BAR") ? "Now the bar is yours to take." : null) : "The room roars your words back at you. Answer it in kind — say the word the room itself keeps saying.",
-  "TORCH-ROOM": () => roomStillHas("TORCH-ROOM", "TORCH") ? "An ivory torch, burning since before anyone can say — treasure in one hand, lantern-batteries saved with the other. The rare loot that pays for its own carrying." : null,
-  "EGYPT-ROOM": () => roomStillHas("EGYPT-ROOM", "COFFIN") ? "The gold coffin is a treasure, and so is what rattles inside it. It's far too heavy for climbing — carry it out through the temple, and remember that prayers at the altar are answered." : null,
-  "END-OF-RAINBOW": () => flagOn("END-OF-RAINBOW", "rainbowSolid") ? (roomStillHas("END-OF-RAINBOW", "POT-OF-GOLD") ? "The pot of gold sits at the rainbow's foot. Take it." : null) : "Every rainbow has a pot of gold — this one just needs convincing. A certain sceptre from a certain coffin, waved right here, works wonders.",
-  "ARAGAIN-FALLS": () => "A rainbow with a beginning is a rainbow with an end — and things at the other end, if you could only walk there. Pharaohs were buried with the answer in their hands.",
-  "ATLANTIS-ROOM": () => roomStillHas("ATLANTIS-ROOM", "TRIDENT") ? "Poseidon mislaid his trident in a drowned city a mile from any sea. Gods are careless like that. Finders keepers is the oldest law there is." : null,
-  "RESERVOIR": () => flagOn("RESERVOIR", "drained") ? "The waters have fallen, and the mud is showing what it swallowed — a trunk of jewels, waiting all these years for someone with dry boots." : "A trunk of jewels lies drowned somewhere under all this water. Open the dam's gates and come back when the waters fall.",
-  "LAND-OF-LIVING-DEAD": () => roomStillHas("LAND-OF-LIVING-DEAD", "SKULL") ? "A thousand skulls down here, and exactly one of them is worth anything — the crystal one. Take it, tread respectfully, and don't wonder too hard about how the owner lost it." : null,
-  "BAT-ROOM": () => "The vampire bat will carry you off somewhere dreadful — unless you carry something that offends its nose. Garlic, say. The jade figurine is safe to take once the bat keeps its distance.",
-  "GAS-ROOM": () => "SMELL that? One open flame — torch, candles, match — and they'll bury what's left of you in a matchbox. Carry only the lantern past here. The sapphire bracelet is the reward for caution.",
-  "MACHINE-ROOM": () => "That machine looks like a giant dryer with a lid. Put a lump of coal inside, close it, and turn the switch — with a screwdriver, not fingers. Pressure makes diamonds.",
-  "MAZE-5": () => "A skeleton, some keys, a bag of coins. The coins are treasure; the skeleton key opens a grating somewhere above your head. Disturb the bones at your peril.",
-  "TREASURE-ROOM": () => "The thief's den — every treasure he's lifted ends up here, plus his silver chalice. He fights best against the armed and worst against the generous: things GIVEN to him occupy his hands. The nasty knife bites deepest.",
-  "SANDY-CAVE": () => flagOn("SANDY-CAVE", "dug") ? null : "The sand is hiding something with wings and a shine. DIG WITH SHOVEL — and know when to stop digging; the sand takes greedy diggers.",
-  "RIVER-4": () => "That red buoy bobbing past isn't just a channel marker. Take it aboard and open it once you're ashore — gently, it's carrying something precious.",
-  // --- the harder puzzles along the way ---
-  "CELLAR": () => "Hear the trap door slam? Someone down here doesn't like visitors using it. There are other ways back to the surface — find them, and one day the door will stay open.",
-  "STUDIO": () => "An artist lived down here once, and the chimney was his front door. It still works — for the slim, the desperate, and the nearly empty-handed. Your lamp and one small thing; the flue keeps the rest.",
-  "TROLL-ROOM": () => flagOn("TROLL-ROOM", "trollDead") ? null : "The troll respects exactly one form of diplomacy: ATTACK TROLL WITH SWORD, repeated with feeling.",
-  "DOME-ROOM": () => flagOn("DOME-ROOM", "ropeTied") ? null : "A railing, a long drop, and no stairs — whoever built this dome expected visitors to bring their own way down. That coil of rope from the attic has been waiting its whole life for this railing.",
-  "NORTH-TEMPLE": () => "Bell, book and candle — the oldest recipe there is for driving out evil. The temple keeps all three, and this room keeps the bell. Collect the set before you go knocking on Hades' gate.",
-  "SOUTH-TEMPLE": () => "The altar offers candles, a black book, and one more thing it doesn't advertise: prayers here are answered, bodily. Worth remembering the day you're carrying something too heavy to climb with.",
-  "ENTRANCE-TO-HADES": () => flagOn("ENTRANCE-TO-HADES", "spiritsGone") ? null : "The dead don't argue with swords — they argue with ceremony. Bell, book and candle, in the order the old rites name them, and don't dawdle between the verses.",
-  "DAM-ROOM": () => "The great bolt turns with the wrench — but only after the dam's control bubble glows. Something in the maintenance room wakes it up. A yellow something.",
-  "MAINTENANCE-ROOM": () => "Four buttons: one wakes the dam controls, one toggles the lights, and one bursts a pipe and floods the room to your neck. The YELLOW one is your friend. The blue one is not.",
-  "DAM-BASE": () => flagOn("DAM-BASE", "boatInflated") ? "Board the boat and launch — but nothing sharp comes aboard, unless you like swimming in white water." : "That pile of plastic is a boat in denial. The hand pump from the reservoir's north side inflates it. Then: nothing sharp aboard.",
-  "SHAFT-ROOM": () => "The miners left you a dumbwaiter: basket, chain, and a long dark drop. The crawl to the bottom is too tight for baggage — so your gear rides down in style while you go on hands and knees. Even the torch trusts the basket more than the crawl.",
-  "TIMBER-ROOM": () => "The passage west is barely a rabbit hole — drop EVERYTHING here and crawl through empty-handed. Your gear can meet you below by basket.",
-  "LOWER-SHAFT": () => "If you lowered the basket from the shaft room above, your gear is waiting in it here. The machine room nearby turns humble coal into something a jeweller would weep over.",
-  "CYCLOPS-ROOM": () => (flagOn("CYCLOPS-ROOM", "cyclopsGone") || flagOn("CYCLOPS-ROOM", "cyclopsAsleep")) ? null : "The cyclops is hungry, which is a problem, since you're food. Feed him a hot lunch and something to wash it down... or speak the name of the hero his father taught him to fear.",
-  "GRATING-ROOM": () => flagOn("GRATING-ROOM", "gratingOpen") ? null : "Daylight through the bars — that's the forest above, closer than it's been in miles. The lock wants a key, and the last person to carry one is lying in a maze nearby, not using it.",
-  "GRATING-CLEARING": () => flagOn("GRATING-CLEARING", "leavesMoved") ? null : "Autumn buried something in this clearing that autumn didn't make. Move the leaves and see what the forest has been standing on.",
-  "MIRROR-ROOM-1": () => "Most mirrors show you where you are. This one is more interested in where you aren't. Touch it.",
-  "MIRROR-ROOM-2": () => "Most mirrors show you where you are. This one is more interested in where you aren't. Touch it.",
-  "SLIDE-ROOM": () => "The slide is a fast, fun, strictly one-way trip down to the cellar. Don't ride it with unfinished business up here.",
-  "SANDY-BEACH": () => "A shovel on a beach is an invitation. Take it — the sandy cave nearby has an itch that needs scratching.",
-};
-
-// A spoiler-light "what next?" nudge based on how far the player has gotten
-// (which key rooms they've reached). Triggered by the hint/clue command.
-function nextClue(): string {
-  const here = currentRoom?.id as string | undefined;
-  if (here) {
-    const fn = ROOM_CLUES[here] ?? (/^MAZE-\d+$/.test(here) ? MAZE_CLUE : undefined);
-    const c = fn?.();
-    if (c) return "CLUE: " + c;
-  }
-  return nextClueGeneric();
-}
-function nextClueGeneric(): string {
-  const v = gameMap ? gameMap.visited() : new Set<string>();
-  const has = (id: string) => v.has(id);
-  const reachedSide = has("EAST-OF-HOUSE") || has("NORTH-OF-HOUSE") || has("SOUTH-OF-HOUSE");
-  const steps: [boolean, string][] = [
-    [!reachedSide && !has("KITCHEN"), "Start with the mail — every adventure begins with paperwork. As for the house: a boarded front door is a promise that there's another way in. Walk around and find it."],
-    [reachedSide && !has("KITCHEN"), "Around the back of the house, one small window sits ajar — an inch of invitation. Push it the rest of the way open and climb through."],
-    [has("KITCHEN") && !has("LIVING-ROOM"), "The kitchen has been picked over already. The living room, just west of here, has not."],
-    [has("LIVING-ROOM") && !has("CELLAR"), "Everything an adventurer needs is in this one room: a lantern, an elvish sword, and — under that oriental rug — a door nobody wanted you to find. Light in hand, blade at hip, down you go."],
-    [has("CELLAR") && !has("TROLL-ROOM"), "Keep the lamp burning — the dark down here has an appetite. Somewhere ahead a troll collects tolls for his passage, and he only takes payment in steel."],
-    [has("TROLL-ROOM"), "The Empire holds nineteen treasures, and the trophy case upstairs keeps the score. Somewhere in the dark a thief is running the same errand, faster — and wherever your lamp doesn't reach, the grue is patient. The map quietly underlines every exit you haven't tried."],
-  ];
-  for (const [cond, msg] of steps) if (cond) return "CLUE: " + msg;
-  return "CLUE: Lamp lit, eyes open. The treasures still out there won't announce themselves — but the map is underlining every exit you haven't taken.";
 }
 
 rooms.onChange((change) => {
@@ -295,7 +104,7 @@ async function startGame() {
           return true;
         }
         if (cmd === "hint" || cmd === "clue" || cmd === "hints" || cmd === "clues") {
-          print(nextClue());
+          print(nextClue(currentRoom?.id, gameMap ? gameMap.visited() : new Set()));
           return true;
         }
         return false;
@@ -362,8 +171,42 @@ async function startGame() {
     if (s) scene2d.show(s); else scene2d.hide();
   };
   (window as any).__thief = () => flashThief(); // Dev: trigger the thief's pass-through overlay
+  (window as any).__trig = applyTriggers; // Dev/verification: run the trigger table against arbitrary I/O
   (window as any).__flag = setRoomFlag; // Dev: toggle room flags to verify both scene states
   (window as any).__mood = (id: string, dark = false) => { ambience.setFlags(roomState); ambience.setRoom(id, dark); }; // Dev: audition a room's soundscape
+  // Dev/verification: deterministic pixel-hash of every registered scene at a
+  // fixed t — refactors must leave every hash identical. Runs a default pass,
+  // then a flag-variant pass, restoring all touched flags afterwards.
+  (window as any).__hashScenes = (t = 1.234) => {
+    const cv = document.createElement("canvas"); cv.width = 512; cv.height = 230;
+    const cx = cv.getContext("2d", { willReadFrequently: true })!;
+    const hashAll = () => {
+      const out: Record<string, number> = {};
+      for (const id of sceneIds()) {
+        cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
+        cx.clearRect(0, 0, 512, 230);
+        (getRoomScene(id, rooms.objects) as any)(cx, 512, 230, t);
+        const d = cx.getImageData(0, 0, 512, 230).data;
+        let h = 2166136261;
+        for (let i = 0; i < d.length; i += 7) { h ^= d[i]; h = Math.imul(h, 16777619) >>> 0; }
+        out[id] = h;
+      }
+      return out;
+    };
+    const VARIANTS: [string, string, boolean | number][] = [
+      ["WEST-OF-HOUSE", "mailboxOpen", true], ["LIVING-ROOM", "rugMoved", true], ["LIVING-ROOM", "trapOpen", true],
+      ["TROLL-ROOM", "trollDead", true], ["CYCLOPS-ROOM", "cyclopsAsleep", true], ["DAM-ROOM", "gatesOpen", true],
+      ["RESERVOIR", "drained", true], ["END-OF-RAINBOW", "rainbowSolid", true], ["ENTRANCE-TO-HADES", "spiritsGone", true],
+      ["MAINTENANCE-ROOM", "leak", true], ["MAINTENANCE-ROOM", "waterLevel", 4], ["DAM-BASE", "boatInflated", true],
+      ["LOUD-ROOM", "echoFixed", true], ["SANDY-CAVE", "dug", true], ["DOME-ROOM", "ropeTied", true],
+    ];
+    const saved = VARIANTS.map(([r, k]) => [r, k, roomState[r]?.[k]] as const);
+    const base = hashAll();
+    for (const [r, k, v] of VARIANTS) setRoomFlag(r, k, v);
+    const variant = hashAll();
+    for (const [r, k, v] of saved) setRoomFlag(r, k, v as any);
+    return { base, variant };
+  };
 }
 
 // --- Title screen: only a REAL Enter/click begins the game -----------------

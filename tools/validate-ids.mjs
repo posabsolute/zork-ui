@@ -2,7 +2,7 @@
 // Every room id and object id that the UI layer hard-codes (scene registry,
 // hasObj props, clue tables, flag triggers) must exist in the parsed game data,
 // or the reference silently never fires. This makes that a build failure.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const rooms = JSON.parse(readFileSync("public/rooms.json", "utf8"));
 const objects = JSON.parse(readFileSync("public/objects.json", "utf8"));
@@ -11,8 +11,10 @@ const objects = JSON.parse(readFileSync("public/objects.json", "utf8"));
 const OBJECT_ALIASES = new Set(["TUBE"]);
 
 const src = {
-  scenes: readFileSync("src/ui/roomScenes.ts", "utf8"),
+  scenes: readdirSync("src/scenes").filter((f) => f.endsWith(".ts")).map((f) => readFileSync(`src/scenes/${f}`, "utf8")).join("\n"),
   main: readFileSync("src/main.ts", "utf8"),
+  triggers: readFileSync("src/game/triggers.ts", "utf8"),
+  clues: readFileSync("src/game/clues.ts", "utf8"),
 };
 const errors = [];
 const checkRoom = (id, where) => { if (!(id in rooms)) errors.push(`unknown room "${id}" (${where})`); };
@@ -29,14 +31,18 @@ for (const [name, text] of Object.entries(src)) {
     checkRoom(m[1], `${name}: ${m[0]}...`);
   }
 }
+// the trigger table's set-tuples: [["ROOM", "flag", value], ...]
+for (const m of src.triggers.matchAll(/\[\s*"([A-Z0-9-]+)",\s*"\w+",\s*(?:true|false|\d)/g)) {
+  checkRoom(m[1], `trigger set: ${m[0]}`);
+}
 // the scene registry — every key must be a real room
 for (const m of src.scenes.matchAll(/^  "([A-Z0-9-]+)": \(ctx/gm)) {
   checkRoom(m[1], `scene registry`);
 }
 // the clue table — every key must be a real room
-for (const m of src.main.matchAll(/^  "([A-Z0-9-]+)": \(\) =>/gm)) {
-  checkRoom(m[1], `clue table`);
-}
+const clueKeys = [...src.clues.matchAll(/^  "([A-Z0-9-]+)": \(\) =>/gm)];
+if (clueKeys.length < 20) errors.push(`clue table scan found only ${clueKeys.length} entries — pattern or file moved?`);
+for (const m of clueKeys) checkRoom(m[1], `clue table`);
 
 if (errors.length) {
   console.error(`validate-ids: ${errors.length} bad reference(s):`);
