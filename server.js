@@ -44,9 +44,14 @@ const server = http.createServer(async (req, res) => {
       file = join(DIST, "index.html"); // SPA fallback
       body = await readFile(file);
     }
+    // vite hashes /assets/ filenames, so they can cache forever (and Cloudflare's
+    // edge will hold them); index.html must always revalidate so deploys land.
+    const cache = file.endsWith("index.html") ? "no-cache"
+      : pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable"
+      : "public, max-age=3600";
     res.writeHead(200, {
       "content-type": TYPES[extname(file)] || "application/octet-stream",
-      "cache-control": file.endsWith("index.html") ? "no-cache" : "public, max-age=3600",
+      "cache-control": cache,
     });
     res.end(body);
   } catch (err) {
