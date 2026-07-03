@@ -1,7 +1,6 @@
 import "./style.css";
 import { bootZork } from "./engine/zvm.ts";
 import { RoomState } from "./engine/roomState.ts";
-import { Viewport } from "./render/viewport.ts";
 import { Compass } from "./ui/compass.ts";
 import { startTitleScene } from "./ui/titleScene.ts";
 import { Scene2D } from "./ui/scene2d.ts";
@@ -11,7 +10,6 @@ import { GameMap } from "./ui/map.ts";
 
 const output = document.getElementById("output") as HTMLElement;
 const input = document.getElementById("input") as HTMLInputElement;
-const canvas = document.getElementById("gl") as HTMLCanvasElement;
 
 // --- Multiple players: each save slot keeps its own game + map in localStorage.
 // Player "1" keeps the legacy (unslotted) keys so existing saves are preserved.
@@ -65,10 +63,9 @@ function buildPlayers() {
 }
 buildPlayers();
 
-// The viewport/compass come up immediately behind the welcome screen; the actual
+// The scene/compass come up immediately behind the welcome screen; the actual
 // Z-machine does NOT boot until the player presses ENTER on the title — so the
 // game never auto-starts.
-const viewport = new Viewport(canvas);
 const scene2d = new Scene2D(document.getElementById("scene2d") as HTMLCanvasElement);
 const compass = new Compass(document.getElementById("viewport") as HTMLElement);
 const rooms = new RoomState();
@@ -172,13 +169,12 @@ function autosave() {
 
 let currentRoom: any = null;
 let shownDark = false;
-// Pick what to render for a room: true darkness if unlit (grue territory), else a
-// hand-composed pixel scene, else the 3D viewport.
-function applyScene(room: any, enteredFrom?: string) {
+// Pick what to render for a room: true darkness if unlit (grue territory), else
+// the room's hand-composed pixel scene (every room has one, or composes one).
+function applyScene(room: any, _enteredFrom?: string) {
   const scene = getRoomScene(room, rooms.objects);
   if (darkNow) scene2d.show(darknessScene);
-  else if (scene) scene2d.show(scene);
-  else { scene2d.hide(); viewport.showRoom(room, enteredFrom); }
+  else scene2d.show(scene ?? darknessScene); // no scene should be impossible; fail dark, never blank
   shownDark = darkNow;
 }
 
@@ -201,7 +197,7 @@ const ROOM_CLUES: Record<string, () => string | null> = {
   "END-OF-RAINBOW": () => flagOn("END-OF-RAINBOW", "rainbowSolid") ? (roomStillHas("END-OF-RAINBOW", "POT-OF-GOLD") ? "The pot of gold sits at the rainbow's foot. Take it." : null) : "Every rainbow has a pot of gold — this one just needs convincing. A certain sceptre from a certain coffin, waved right here, works wonders.",
   "ARAGAIN-FALLS": () => "A rainbow with a beginning is a rainbow with an end — and things at the other end, if you could only walk there. Pharaohs were buried with the answer in their hands.",
   "ATLANTIS-ROOM": () => roomStillHas("ATLANTIS-ROOM", "TRIDENT") ? "Poseidon mislaid his trident in a drowned city a mile from any sea. Gods are careless like that. Finders keepers is the oldest law there is." : null,
-  "RESERVOIR": () => roomStillHas("RESERVOIR", "TRUNK") ? "A trunk of jewels lies drowned in the mud — it only surfaces when the reservoir drains. Open the dam's gates and come back when the waters fall." : null,
+  "RESERVOIR": () => flagOn("RESERVOIR", "drained") ? "The waters have fallen, and the mud is showing what it swallowed — a trunk of jewels, waiting all these years for someone with dry boots." : "A trunk of jewels lies drowned somewhere under all this water. Open the dam's gates and come back when the waters fall.",
   "LAND-OF-LIVING-DEAD": () => roomStillHas("LAND-OF-LIVING-DEAD", "SKULL") ? "A thousand skulls down here, and exactly one of them is worth anything — the crystal one. Take it, tread respectfully, and don't wonder too hard about how the owner lost it." : null,
   "BAT-ROOM": () => "The vampire bat will carry you off somewhere dreadful — unless you carry something that offends its nose. Garlic, say. The jade figurine is safe to take once the bat keeps its distance.",
   "GAS-ROOM": () => "SMELL that? One open flame — torch, candles, match — and they'll bury what's left of you in a matchbox. Carry only the lantern past here. The sapphire bracelet is the reward for caution.",
@@ -306,7 +302,6 @@ async function startGame() {
       },
       onCommand(line) {
         rooms.noteCommand(line);
-        viewport.pulse(1);
         lastCmd = line.trim().toLowerCase();
       },
       onInputReady() {
@@ -356,7 +351,7 @@ async function startGame() {
   }
 
   setTimeout(() => rooms.update(latestStatus), 0);
-  (window as any).__zork = { viewport, rooms, game };
+  (window as any).__zork = { rooms, game };
   // Dev: force-render any room's scene by id (for screenshot-verifying deep rooms
   // without having to reach them in-game). e.g. __scene("TROLL-ROOM")
   (window as any).__scene = (id: string) => {
