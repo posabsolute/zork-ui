@@ -72,7 +72,7 @@ npm start          # node server.js — serves dist/ on $PORT
 
 ## Credits
 
-- **Zork I** was created by Tim Anderson, Marc Blank, Bruce Daniels and Dave Lebling at Infocom, 1980. The game's source and story file were released under the MIT license (see `ZORK_LICENSE`) in the 2025 Microsoft/Xbox historical release.
+- **Zork I** was created by Tim Anderson, Marc Blank, Bruce Daniels and Dave Lebling at Infocom, 1980. The game's source and story file were released under the MIT license (see `ZORK_LICENSE`) in the [2025 Microsoft/Xbox historical release](https://github.com/historicalsource/zork1). ZORK is a trademark of its respective owner; this is an unofficial fan tribute, not affiliated with or endorsed by Microsoft or Activision.
 - Z-machine interpreter: [ifvms.js](https://github.com/curiousdannii/ifvms.js) by Dannii Willis. Glk layer: [GlkOte](https://eblong.com/zarf/glk/glkote.html) by Andrew Plotkin.
 - Scenes, map, ambience and everything green-on-black: built by [posabsolute](https://github.com/posabsolute) with Claude Code.
 
