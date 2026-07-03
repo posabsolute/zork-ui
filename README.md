@@ -1,33 +1,76 @@
-# Zork I Source Code Collection
+# ZORK UI
 
-Zork I is a 1980 interactive fiction game written by Marc Blank, Dave Lebling, Bruce Daniels and Tim Anderson and published by Infocom.
+> *West of House. You are standing in an open field west of a white house, with a boarded front door.*
+>
+> **Zork I (1980), replayed through a CRT** — the complete, unmodified original game, wrapped in 110 hand-crafted animated pixel-art scenes that watch what you do and change with the world.
 
-Further information on Zork I:
+![West of House — the full interface: scene, terminal, and the adventurer's auto-map](docs/screenshots/hero-west-of-house.png)
 
-* [Wikipedia](https://en.wikipedia.org/wiki/Zork_I)
-* [The Digital Antiquarian](https://www.filfre.net/2012/01/selling-zork/)
-* [The Interactive Fiction Database](https://ifdb.tads.org/viewgame?id=0dbnusxunq7fw5ro)
-* [The Infocom Gallery](http://gallery.guetech.org/zork1/zork1.html)
-* [IFWiki](http://www.ifwiki.org/index.php/Zork_I)
+**Play it:** https://zork-ui-production.up.railway.app
 
-__What is this Repository?__
+## What this is
 
-This repository is a directory of source code for the Infocom game "Zork I", including a variety of files both used and discarded in the production of the game. It is written in ZIL (Zork Implementation Language), a refactoring of MDL (Muddle), itself a dialect of LISP created by MIT students and staff.
+The real Zork I story file runs in your browser on a genuine Z-machine interpreter — every puzzle, every death, every grue exactly as Infocom shipped it in 1980. Around that terminal, this project adds what 1980 couldn't:
 
-The source code was contributed anonymously and represents a snapshot of the Infocom development system at time of shutdown - there is no remaining way to compare it against any official version as of this writing, and so it should be considered canonical, but not necessarily the exact source code arrangement for production.
+- **110 hand-crafted pixel-art scenes**, one per room — rendered live in code on a 256-pixel canvas buffer and upscaled hard, Daggerfall/SCUMM style. No image assets anywhere: every moonlit field, burning gate and drowned temple is drawn pixel-by-pixel every frame, and every scene is animated (rain, fireflies, torch flicker, drifting mist).
+- **Scenes that track the actual game state.** The renderer reads the Z-machine's live object tree, so the brown sack sits on the kitchen table until you take it — and vanishes from the painting when the thief takes it from *you*.
+- **A generative soundtrack** synthesized from nothing: no audio files, just WebAudio drones, drips and wind that crossfade per region — with a heartbeat when you're in the dark where the grue waits.
+- **The adventurer's map**: a Trizbort-style auto-map that draws itself as you explore, direction-true, floor by floor, quietly underlining every exit you haven't tried.
+- **Clues in the narrator's voice** — `clue` gives a spoiler-light nudge specific to the room you're in, for every treasure and every hard puzzle.
 
-__Basic Information on the Contents of This Repository__
+## The world reacts
 
-It is mostly important to note that there is currently no known way to compile the source code in this repository into a final "Z-machine Interpreter Program" (ZIP) file using an official Infocom-built compiler. There is a user-maintained compiler named [ZILF](http://zilf.io) that has been shown to successfully compile these .ZIL files with minor issues. There are .ZIP files in some of the Infocom Source Code repositories but they were there as of final spin-down of the Infocom Drive and the means to create them is currently lost.
+Open the mailbox and the little door swings up. Kill the troll and his corpse stops blocking the hall. Feed the cyclops and he slumps snoring against the wall. Press the wrong button in the maintenance room and a pipe bursts — the water rising in the art, turn by turn, exactly as fast as the game says it is.
 
-Throughout its history, Infocom used a TOPS20 mainframe with a compiler (ZILCH) to create and edit language files - this repository is a mirror of the source code directory archive of Infocom but could represent years of difference from what was originally released.
+| The blue button was not your friend | The cyclops, considering you as food |
+| --- | --- |
+| ![Maintenance room flooding](docs/screenshots/maintenance-flood.png) | ![Cyclops room](docs/screenshots/cyclops-room.png) |
 
-In general, Infocom games were created by taking previous Infocom source code, copying the directory, and making changes until the game worked the way the current Implementor needed. Structure, therefore, tended to follow from game to game and may or may not accurately reflect the actual function of the code.
+| The gates of Hades | The living room, before the rug moved |
+| --- | --- |
+| ![Entrance to Hades](docs/screenshots/entrance-to-hades.png) | ![Living room](docs/screenshots/living-room.png) |
 
-There are also multiple versions of the "Z-Machine" and code did change notably between the first years of Infocom and a decade later. Addition of graphics, sound and memory expansion are all slowly implemented over time.
+More than thirty of these interactive states are wired to the game's own text: the rug and the trap door, the dam's sluice gates, the drained reservoir, the rope tied to the dome railing, the rainbow turned solid, the exorcised spirits, the thief glimpsed mid-burglary striding through your room…
 
-__What is the Purpose of this Repository__
+![The title screen](docs/screenshots/title.png)
 
-This collection is meant for education, discussion, and historical work, allowing researchers and students to study how code was made for these interactive fiction games and how the system dealt with input and processing.
+## The clues
 
-Researchers are encouraged to share their discoveries about the information in this source code and the history of Infocom and its many innovative employees.
+Type `clue` anywhere. Instead of a walkthrough, you get the narrator:
+
+> *Hear the trap door slam? Someone down here doesn't like visitors using it. There are other ways back to the surface — find them, and one day the door will stay open.*
+
+> *Four buttons: one wakes the dam controls, one toggles the lights, and one bursts a pipe and floods the room to your neck. The YELLOW one is your friend. The blue one is not.*
+
+> *Most mirrors show you where you are. This one is more interested in where you aren't. Touch it.*
+
+## How it works
+
+- **Z-machine:** [ifvms.js](https://github.com/curiousdannii/ifvms.js) runs the original `zork1.z3` byte-for-byte; [GlkOte](https://eblong.com/zarf/glk/glkote.html) handles the I/O plumbing.
+- **World introspection:** the renderer reads Z-machine memory directly — the object tree, decoded short names, light state — and maps live objects to the rooms' props. No forked game logic; the story file stays the single source of truth.
+- **Scenes:** TypeScript canvas code. One draw function per room family, a 256px offscreen buffer, nearest-neighbour upscale, ordered Bayer dithering, tight committed palettes. Everything animates on the pixel grid.
+- **Audio:** a small WebAudio engine — oscillator drones with octave partials, filtered noise beds, one-shot blips — driven by room-family moods and game flags.
+- **Persistence:** autosaves into localStorage with multiple player slots; the map, scene states and world flags survive death (as is traditional).
+- **Mobile:** responsive layout — scene stacked over terminal, the map as a full-screen slide-in, touch pan/pinch on the map.
+
+## Run it locally
+
+```sh
+npm install
+npm run dev        # vite, http://localhost:5174
+```
+
+Build and serve like production:
+
+```sh
+npm run build
+npm start          # node server.js — serves dist/ on $PORT
+```
+
+## Credits
+
+- **Zork I** was created by Tim Anderson, Marc Blank, Bruce Daniels and Dave Lebling at Infocom, 1980. The game's source and story file were released under the MIT license (see `ZORK_LICENSE`) in the 2025 Microsoft/Xbox historical release.
+- Z-machine interpreter: [ifvms.js](https://github.com/curiousdannii/ifvms.js) by Dannii Willis. Glk layer: [GlkOte](https://eblong.com/zarf/glk/glkote.html) by Andrew Plotkin.
+- Scenes, map, ambience and everything green-on-black: built by [Cedric Dugas](https://github.com/posabsolute) with Claude Code.
+
+*It is pitch black. You are likely to be eaten by a grue.*
