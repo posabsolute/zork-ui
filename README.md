@@ -1,22 +1,25 @@
-# ZORK UI
+# ZORK UI — a non-intrusive UI on top of Zork I
 
 > *West of House. You are standing in an open field west of a white house, with a boarded front door.*
->
-> **Zork I (1980), replayed through a CRT** — the complete, unmodified original game, wrapped in 110 hand-crafted animated pixel-art scenes that watch what you do and change with the world.
+
+**The game is not changed. Not one word, not one rule, not one turn.** The real 1980 Zork I story file runs byte-for-byte on a genuine Z-machine in your browser — same parser, same puzzles, same deaths, same grue. What this project adds is a shell *around* that terminal: atmosphere and quality-of-life, layered on top, never interfering underneath.
 
 ![West of House — the full interface: scene, terminal, and the adventurer's auto-map](docs/screenshots/hero-west-of-house.png)
 
 **Play it:** https://zork-ui-production.up.railway.app
 
-## What this is
+## The idea: observe, never interfere
 
-The real Zork I story file runs in your browser on a genuine Z-machine interpreter — every puzzle, every death, every grue exactly as Infocom shipped it in 1980. Around that terminal, this project adds what 1980 couldn't:
+Everything visual and audible here is a **read-only observer** of the running game. The UI watches the Z-machine's memory and output text, and reacts — it never injects commands, patches the story file, or forks the game logic. If you stripped the shell away, you'd be left with exactly the Zork I your parents played, mid-session, unharmed. Even the added `help` and `clue` commands are intercepted at the UI layer, so they don't consume a game turn.
+
+On top of that untouched game, the shell adds:
 
 - **110 hand-crafted pixel-art scenes**, one per room — rendered live in code on a 256-pixel canvas buffer and upscaled hard, Daggerfall/SCUMM style. No image assets anywhere: every moonlit field, burning gate and drowned temple is drawn pixel-by-pixel every frame, and every scene is animated (rain, fireflies, torch flicker, drifting mist).
 - **Scenes that track the actual game state.** The renderer reads the Z-machine's live object tree, so the brown sack sits on the kitchen table until you take it — and vanishes from the painting when the thief takes it from *you*.
-- **A generative soundtrack** synthesized from nothing: no audio files, just WebAudio drones, drips and wind that crossfade per region — with a heartbeat when you're in the dark where the grue waits.
+- **A generative soundtrack** synthesized from nothing: no audio files, just WebAudio drones, drips and wind that crossfade per region — with a heartbeat when you're in the dark where the grue waits. One click turns it off.
 - **The adventurer's map**: a Trizbort-style auto-map that draws itself as you explore, direction-true, floor by floor, quietly underlining every exit you haven't tried.
-- **Clues in the narrator's voice** — `clue` gives a spoiler-light nudge specific to the room you're in, for every treasure and every hard puzzle.
+- **Clues in the narrator's voice** — `clue` gives a spoiler-light nudge specific to the room you're in, for every treasure and every hard puzzle. A nudge, never a walkthrough.
+- **Quality of life, 2020s edition:** autosave with multiple player slots, command history, a compass showing the room's real exits, mobile layout with touch map controls.
 
 ## The world reacts
 
@@ -47,7 +50,7 @@ Type `clue` anywhere. Instead of a walkthrough, you get the narrator:
 ## How it works
 
 - **Z-machine:** [ifvms.js](https://github.com/curiousdannii/ifvms.js) runs the original `zork1.z3` byte-for-byte; [GlkOte](https://eblong.com/zarf/glk/glkote.html) handles the I/O plumbing.
-- **World introspection:** the renderer reads Z-machine memory directly — the object tree, decoded short names, light state — and maps live objects to the rooms' props. No forked game logic; the story file stays the single source of truth.
+- **World introspection (the non-intrusive part):** the renderer reads Z-machine memory directly — the object tree, decoded short names, light state — and listens to the game's own output text for events. Strictly read-only: no forked game logic, no injected commands; the story file stays the single source of truth.
 - **Scenes:** TypeScript canvas code. One draw function per room family, a 256px offscreen buffer, nearest-neighbour upscale, ordered Bayer dithering, tight committed palettes. Everything animates on the pixel grid.
 - **Audio:** a small WebAudio engine — oscillator drones with octave partials, filtered noise beds, one-shot blips — driven by room-family moods and game flags.
 - **Persistence:** autosaves into localStorage with multiple player slots; the map, scene states and world flags survive death (as is traditional).
