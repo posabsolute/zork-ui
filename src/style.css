@@ -13,6 +13,7 @@ html, body {
   background: #000;
   overflow: hidden;
   font-family: var(--term-font);
+  visibility: visible; /* releases the inline anti-FOUC guard in index.html */
 }
 
 /* ===== Welcome / title screen (Outrun synthwave) ===== */
