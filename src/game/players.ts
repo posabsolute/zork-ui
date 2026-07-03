@@ -9,6 +9,21 @@ import { ambience } from "../audio/ambience.ts";
 export const SLOT = localStorage.getItem("zork1:slot") || "1";
 export const SAVE_KEY = SLOT === "1" ? "zork1:quetzal" : `zork1:quetzal:${SLOT}`;
 export const MAP_KEY = SLOT === "1" ? "zork1:map" : `zork1:map:${SLOT}`;
+export const SCORE_KEY = SLOT === "1" ? "zork1:score" : `zork1:score:${SLOT}`;
+
+const scoreTip = (slot: string): string => {
+  try {
+    const v = JSON.parse(localStorage.getItem(slot === "1" ? "zork1:score" : `zork1:score:${slot}`) || "null");
+    if (v && typeof v.score === "number") return `player ${slot} — score ${v.score} · moves ${v.moves ?? "?"}`;
+  } catch { /* corrupt */ }
+  return `player ${slot}`;
+};
+/** Live-update the current slot's tooltip as the game reports score changes. */
+export function setScoreTooltip(score: number, moves: number) {
+  try { localStorage.setItem(SCORE_KEY, JSON.stringify({ score, moves })); } catch { /* quota */ }
+  const b = document.querySelector<HTMLButtonElement>("#players .pl-btn.on");
+  if (b) b.title = `player ${SLOT} — score ${score} · moves ${moves}`;
+}
 export function buildPlayers() {
   const host = document.getElementById("players"); if (!host) return;
   const slots: string[] = JSON.parse(localStorage.getItem("zork1:slots") || '["1"]');
@@ -16,6 +31,7 @@ export function buildPlayers() {
   for (const s of slots) {
     const b = document.createElement("button");
     b.className = "pl-btn" + (s === SLOT ? " on" : ""); b.textContent = s;
+    b.title = scoreTip(s); // score lives HERE, on hover — never on permanent display
     b.onclick = () => { if (s !== SLOT) { localStorage.setItem("zork1:slot", s); location.reload(); } };
     host.appendChild(b);
   }

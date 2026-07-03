@@ -133,6 +133,44 @@ texture in pixel space, and orient it along the surface:
 A two-value alternation per row is enough; the dither does the rest. Texture
 running against the form (vertical lines on a floor plane) breaks the 3D read.
 
+## The masters' methods — named techniques, with provenance
+
+The craft above wasn't invented here; it's the accumulated discipline of the
+great pixel artists. Knowing WHO each rule comes from helps you know when it
+applies:
+
+- **Derek Yu's big-to-small workflow** (Spelunky; his classic pixel tutorial):
+  work in strict passes — 1) silhouette, 2) flat value masses, 3) light
+  direction, 4) texture, 5) selective detail. Never polish step 5 while step 2
+  is unresolved; when a scene "won't come together," back up a pass, don't add
+  more detail.
+- **Arne Niklas Jansson's colour-count discipline** (Androidarts; his famous
+  16-colour palette): literally COUNT your colours per scene. Two ramp steps
+  closer than ~8% value with the same hue are one colour — merge them. Every
+  colour must earn its slot; 12 committed colours beat 30 timid ones.
+- **Mark Ferrari's colour cycling** (LucasArts; GDC "8 Bit & '8 Bitish'
+  Graphics"): animate by moving VALUES through fixed pixels, never by moving
+  geometry. Our waterfalls, glints, flames and drips all follow this — the
+  shape is constant, the highlight phase scrolls.
+- **Pedro Medeiros' (Saint11) cluster theory** (Celeste): pixels live in
+  clusters that each read as one form; a lone pixel is noise unless it's a
+  deliberate spark. Corollary for animation: motion smaller than one pixel is
+  done by BRIGHTNESS shift (fade a pixel up as its neighbour fades down), not
+  by jittering position 1px per frame — 1px jitter reads as vibration.
+- **Banding** (Pixelation-forum vocabulary — the classic beginner tell): when a
+  line of pixels runs parallel to the edge it borders, hugging it step for
+  step, the two read as one thick blurry edge. Break it — vary run lengths,
+  offset the inner line, or drop it. Check every highlight line you draw along
+  a slope or curve.
+- **Raymond Schlitter's (Slynyrd) value-first composition** (his pixel-blog
+  series): the squint test and three-mass structure in this skill are his
+  formalisation. His other keeper: pick the palette's darkest and lightest
+  colours FIRST and place them only at the focal point; fill everything else
+  between.
+- **Test at 1x** (universal studio practice): the buffer is authored at 256px
+  but judged after upscale — screenshot at display size AND squint-small. If a
+  detail only reads when zoomed in, it doesn't exist.
+
 ## Respect the game — atmosphere is free, game elements are not
 
 This is the most important rule and the easiest to break for the sake of a

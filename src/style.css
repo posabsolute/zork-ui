@@ -298,6 +298,13 @@ html, body {
   font-family: var(--term-font);
   text-align: center;
 }
+/* lit directions are buttons — tap to walk */
+#compass .cmp-label.on, #compass .cmp-vert span.on { pointer-events: auto; cursor: pointer; }
+#compass .cmp-label.on:hover { fill: #d8ffe4; }
+#compass .cmp-vert span.on:hover { color: #d8ffe4; }
+.map-exits .map-go { cursor: pointer; }
+.map-exits .map-go:hover { color: #eafff0; text-decoration: underline; }
+.map-exits .map-untried { color: #e8c24a; font-weight: bold; }
 #compass svg { width: 96px; height: 96px; overflow: visible; }
 #compass .cmp-ring { fill: none; stroke: #1f5a33; stroke-width: 1; opacity: 0.6; }
 #compass .cmp-tick { stroke: #1f5a33; stroke-width: 1.5; }
@@ -360,6 +367,31 @@ html, body {
   text-shadow: inherit;
   caret-color: var(--term-fg);
 }
+
+/* ===== The big moments: death and victory, full-screen CRT beats ===== */
+.moment {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: rgba(0, 0, 0, 0.93);
+  animation: moment-in 0.35s steps(4) both;
+  pointer-events: none;
+}
+.moment::after {
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.35) 2px 4px);
+}
+.moment.out { animation: moment-out 1.1s ease both; }
+.moment-text { font-family: "Orbitron", var(--term-font); font-weight: 900; font-size: clamp(38px, 8.5vw, 104px); letter-spacing: 0.06em; }
+.moment.died .moment-text { color: #ff3b30; text-shadow: 4px 0 #7a0c0c, -4px 0 rgba(51,224,255,0.15), 0 0 34px #ff3b30; animation: died-jitter 0.9s steps(2) infinite; }
+.moment.won .moment-text { color: #ffe14a; text-shadow: 0 0 18px #ffae3a, 0 0 60px #ff7a3a; }
+.moment-sub { font-family: var(--term-font); letter-spacing: 0.3em; text-transform: uppercase; font-size: clamp(10px, 1.6vw, 15px); color: #8a9aa0; }
+.moment.won .moment-sub { color: #ffedb0; }
+.moment-eyes { display: flex; gap: 26px; margin-top: 14px; }
+.moment-eyes span { width: 14px; height: 9px; border-radius: 50%; background: #ffb02e; box-shadow: 0 0 14px #ff8c1a; animation: grue-blink 2.2s steps(1) infinite; }
+@keyframes moment-in { from { opacity: 0; transform: scale(1.05); } to { opacity: 1; transform: none; } }
+@keyframes moment-out { to { opacity: 0; filter: blur(6px); } }
+@keyframes died-jitter { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
+@keyframes grue-blink { 0%, 6%, 100% { transform: scaleY(1); } 3% { transform: scaleY(0.1); } }
 
 /* the MAP toggle only exists on small screens (desktop shows the map beside) */
 .pl-btn.pl-map { display: none; }

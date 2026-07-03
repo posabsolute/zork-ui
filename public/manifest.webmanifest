@@ -1,0 +1,14 @@
+{
+  "name": "ZORK I — The Great Underground Empire",
+  "short_name": "ZORK",
+  "description": "The unmodified 1980 Zork I, wrapped in 110 animated pixel-art scenes.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#04140a",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

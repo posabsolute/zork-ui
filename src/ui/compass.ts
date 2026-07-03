@@ -55,6 +55,8 @@ export class Compass {
       text.setAttribute("x", `${lx}`); text.setAttribute("y", `${ly + 3}`);
       text.setAttribute("class", "cmp-label");
       text.textContent = d.label;
+      // a LIT direction is a button: tap the compass to walk that way
+      text.addEventListener("click", () => { if (text.classList.contains("on")) window.dispatchEvent(new CustomEvent("zork-go", { detail: d.label.toLowerCase() })); });
       svg.appendChild(text);
       this.labels.set(d.key, text);
     }
@@ -65,8 +67,10 @@ export class Compass {
     vert.className = "cmp-vert";
     this.up = document.createElement("span");
     this.up.textContent = "↑ up";
+    this.up.onclick = () => { if (this.up.classList.contains("on")) window.dispatchEvent(new CustomEvent("zork-go", { detail: "up" })); };
     this.down = document.createElement("span");
     this.down.textContent = "↓ down";
+    this.down.onclick = () => { if (this.down.classList.contains("on")) window.dispatchEvent(new CustomEvent("zork-go", { detail: "down" })); };
     vert.appendChild(this.up);
     vert.appendChild(this.down);
     wrap.appendChild(vert);

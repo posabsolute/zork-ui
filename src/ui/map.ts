@@ -364,12 +364,22 @@ export class GameMap {
     const exitDirs = room ? Object.keys(room.exits).filter((d) => room.exits[d].to) : [];
     const untried = room ? exitDirs.filter((d) => { const to = room.exits[d].to!; return !this.nodes.has(to); }) : [];
     const items = sel.items.length ? sel.items.map((i) => `<li>${esc(i)}</li>`).join("") : `<li class="map-dim">— nothing notable —</li>`;
+    // exits are TAPPABLE when you're looking at the room you're standing in —
+    // tapping one walks that way (dispatches a zork-go the main loop submits)
+    const walkable = sel.id === this.current;
+    const exitHtml = exitDirs.map((d) => {
+      const cls = (untried.includes(d) ? "map-untried" : "") + (walkable ? " map-go" : "");
+      return `<span class="${cls.trim()}"${walkable ? ` data-go="${d.toLowerCase()}"` : ""}>${d.toLowerCase()}</span>`;
+    }).join(" · ");
     this.info.innerHTML = `
       <div class="map-here">${sel.id === this.current ? "► " : ""}${esc(sel.name)}</div>
       <div class="map-sub">FOUND HERE</div>
       <ul class="map-items">${items}</ul>
       <div class="map-sub">EXITS</div>
-      <div class="map-exits">${exitDirs.length ? exitDirs.map((d) => untried.includes(d) ? `<b class="map-untried">${d.toLowerCase()}</b>` : d.toLowerCase()).join(" · ") : "—"}</div>`;
+      <div class="map-exits">${exitDirs.length ? exitHtml : "—"}</div>`;
+    this.info.querySelectorAll<HTMLElement>("[data-go]").forEach((el) => {
+      el.onclick = () => window.dispatchEvent(new CustomEvent("zork-go", { detail: el.dataset.go }));
+    });
   }
 
   private save() { try { localStorage.setItem(this.saveKey, JSON.stringify({ current: this.current, nodes: [...this.nodes.values()].map((n) => ({ id: n.id, name: n.name, items: n.items })) })); } catch { /* quota */ } }

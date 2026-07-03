@@ -9,10 +9,15 @@ import { ambience } from "./audio/ambience.ts";
 import { GameMap } from "./ui/map.ts";
 import { applyTriggers } from "./game/triggers.ts";
 import { nextClue } from "./game/clues.ts";
-import { SLOT, SAVE_KEY, MAP_KEY, ROOMS_KEY, buildPlayers } from "./game/players.ts";
+import { SAVE_KEY, MAP_KEY, ROOMS_KEY, buildPlayers, setScoreTooltip } from "./game/players.ts";
 
 const output = document.getElementById("output") as HTMLElement;
 const input = document.getElementById("input") as HTMLInputElement;
+
+// PWA: once loaded, the whole game plays offline (it's all client-side anyway)
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => { /* offline is a bonus, not a requirement */ });
+}
 
 buildPlayers();
 
@@ -54,6 +59,31 @@ function autosave() {
   }
 }
 
+// Tap-to-move: the compass and the map's exit list dispatch zork-go — submit it
+// through the real input so the engine (and the transcript) see a normal command.
+window.addEventListener("zork-go", (e) => {
+  const dir = (e as CustomEvent).detail;
+  if (!gameRef || typeof dir !== "string") return;
+  input.value = dir;
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+});
+
+// The game's two biggest beats get a full-screen CRT moment instead of
+// scrolling by in green: "**** You have died ****" and the 350-point win.
+let momentShown = 0;
+function bigMoment(kind: "died" | "won") {
+  if (Date.now() - momentShown < 4000) return; // one at a time
+  momentShown = Date.now();
+  const d = document.createElement("div");
+  d.className = "moment " + kind;
+  d.innerHTML = kind === "died"
+    ? `<div class="moment-text">YOU HAVE DIED</div><div class="moment-sub">the darkness takes you&hellip; for now</div><div class="moment-eyes"><span></span><span></span></div>`
+    : `<div class="moment-text">YOU HAVE WON</div><div class="moment-sub">master adventurer of the great underground empire</div>`;
+  document.body.appendChild(d);
+  setTimeout(() => { d.classList.add("out"); setTimeout(() => d.remove(), 1200); }, kind === "died" ? 2800 : 5200);
+}
+if (import.meta.env.DEV) (window as any).__moment = bigMoment; // Dev: preview the death/victory beats
+
 let currentRoom: any = null;
 let shownDark = false;
 // Pick what to render for a room: true darkness if unlit (grue territory), else
@@ -94,8 +124,12 @@ async function startGame() {
     output,
     input,
     hooks: {
-      onStatus(left) {
+      onStatus(left, right) {
         latestStatus = left;
+        // score/moves ride the status line's right side — keep the player
+        // button's hover tooltip current (never shown permanently; it detracts)
+        const sc = right.match(/score:\s*(-?\d+)/i), mv = right.match(/moves:\s*(\d+)/i);
+        if (sc) setScoreTooltip(Number(sc[1]), mv ? Number(mv[1]) : 0);
       },
       intercept(line, print) {
         const cmd = line.trim().toLowerCase();
@@ -121,6 +155,8 @@ async function startGame() {
         const fresh = txt.slice(lastOutLen);
         lastOutLen = txt.length;
         if (fresh.trim()) darkNow = /pitch black|eaten by a grue|pitch dark|it is dark/i.test(fresh);
+        if (/\*{3,}\s*you have died\s*\*{3,}/i.test(fresh)) bigMoment("died");
+        else if (/\*{3,}\s*you have won\s*\*{3,}/i.test(fresh)) bigMoment("won");
         const interacted = detectInteractions(lastCmd, fresh);
         rooms.update(latestStatus);
         // Re-render if light/dark flipped or an interactive element changed,
