@@ -363,7 +363,8 @@ export class GameMap {
     const room = this.rooms[sel.id];
     const exitDirs = room ? Object.keys(room.exits).filter((d) => room.exits[d].to) : [];
     const untried = room ? exitDirs.filter((d) => { const to = room.exits[d].to!; return !this.nodes.has(to); }) : [];
-    const items = sel.items.length ? sel.items.map((i) => `<li>${esc(i)}</li>`).join("") : `<li class="map-dim">— nothing notable —</li>`;
+    // NOTE: room contents are deliberately NOT listed — discovering what a place
+    // holds is the game; the clue command is the sanctioned nudge.
     // exits are TAPPABLE when you're looking at the room you're standing in —
     // tapping one walks that way (dispatches a zork-go the main loop submits)
     const walkable = sel.id === this.current;
@@ -373,8 +374,6 @@ export class GameMap {
     }).join(" · ");
     this.info.innerHTML = `
       <div class="map-here">${sel.id === this.current ? "► " : ""}${esc(sel.name)}</div>
-      <div class="map-sub">FOUND HERE</div>
-      <ul class="map-items">${items}</ul>
       <div class="map-sub">EXITS</div>
       <div class="map-exits">${exitDirs.length ? exitHtml : "—"}</div>`;
     this.info.querySelectorAll<HTMLElement>("[data-go]").forEach((el) => {

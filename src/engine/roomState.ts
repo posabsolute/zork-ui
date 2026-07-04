@@ -241,16 +241,13 @@ export class RoomState {
       exits.push(`  ${d.toLowerCase()} (${abbr[d]})${note}`);
     }
 
-    const objs = room.objects.map((id) => "  " + (this.objects[id]?.name ?? id.toLowerCase()));
-
+    // Room contents are deliberately not listed — finding what a place holds
+    // is the game. The clue command is the sanctioned nudge.
     const lines: string[] = [];
     lines.push(`── ${room.name} ──`);
     lines.push("");
     lines.push("EXITS:");
     lines.push(exits.length ? exits.join("\n") : "  (none obvious)");
-    lines.push("");
-    lines.push("YOU MIGHT SEE HERE:");
-    lines.push(objs.length ? objs.join("\n") : "  (nothing notable)");
     lines.push("");
     lines.push("USEFUL COMMANDS:");
     lines.push("  LOOKING    look (l), examine (x) <thing>, look in/under <thing>,");
