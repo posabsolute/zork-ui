@@ -36,9 +36,9 @@ interface Trigger {
 // bottom, every matching entry fires (a later match can override an earlier one).
 const TRIGGERS: Trigger[] = [
   // LIVING-ROOM: rug / trap door / trophy case / treasures
-  { note: "move the rug", cmd: /^(?:move|push|lift|slide)\s+(?:the\s+)?(?:oriental\s+)?rug\b/, out: /trap\s*door|moved|reveal/i, set: [["LIVING-ROOM", "rugMoved", true]] },
-  { note: "open the trap door", cmd: /^open\s+(?:the\s+)?trap\s*door\b/, needOk: true, set: [["LIVING-ROOM", "trapOpen", true]] },
-  { note: "close the trap door", cmd: /^close\s+(?:the\s+)?trap\s*door\b/, set: [["LIVING-ROOM", "trapOpen", false]] },
+  { note: "move the rug", cmd: /^(?:move|push|pull|slide|roll|lift)\s+(?:the\s+)?(?:oriental\s+)?(?:rug|carpet)\b/, out: /trap\s*door|moved|reveal/i, set: [["LIVING-ROOM", "rugMoved", true]] },
+  { note: "open the trap door", cmd: /^open\s+(?:the\s+)?(?:trap[\s-]*door|cover)\b/, needOk: true, set: [["LIVING-ROOM", "trapOpen", true]] },
+  { note: "close the trap door", cmd: /^close\s+(?:the\s+)?(?:trap[\s-]*door|cover)\b/, set: [["LIVING-ROOM", "trapOpen", false]] },
   { note: "open the trophy case", cmd: /^open\s+(?:the\s+)?(?:trophy\s+)?case\b/, out: /open/i, set: [["LIVING-ROOM", "caseOpen", true]] },
   { note: "close the trophy case", cmd: /^close\s+(?:the\s+)?(?:trophy\s+)?case\b/, set: [["LIVING-ROOM", "caseOpen", false]] },
   { note: "put a treasure in the case", act: (c) => {
@@ -50,8 +50,8 @@ const TRIGGERS: Trigger[] = [
     }
   } },
   // WEST-OF-HOUSE: mailbox
-  { note: "open the mailbox", cmd: /^open\s+(?:the\s+)?(?:small\s+)?mailbox\b/, out: /open/i, set: [["WEST-OF-HOUSE", "mailboxOpen", true]] },
-  { note: "close the mailbox", cmd: /^close\s+(?:the\s+)?mailbox\b/, set: [["WEST-OF-HOUSE", "mailboxOpen", false]] },
+  { note: "open the mailbox", cmd: /^open\s+(?:the\s+)?(?:small\s+)?(?:mail)?box\b/, out: /open/i, set: [["WEST-OF-HOUSE", "mailboxOpen", true]] },
+  { note: "close the mailbox", cmd: /^close\s+(?:the\s+)?(?:small\s+)?(?:mail)?box\b/, set: [["WEST-OF-HOUSE", "mailboxOpen", false]] },
   // window — belongs to whichever room you're in (Kitchen or Behind House)
   { note: "open the window (current room)", act: (c) => { if (c.here && /^open\s+(?:the\s+)?window\b/.test(c.cmd) && /open|allow entry/i.test(c.fresh)) c.setRoomFlag(c.here, "windowOpen", true); } },
   { note: "close the window (current room)", act: (c) => { if (c.here && /^close\s+(?:the\s+)?window\b/.test(c.cmd)) c.setRoomFlag(c.here, "windowOpen", false); } },
@@ -59,21 +59,21 @@ const TRIGGERS: Trigger[] = [
   { note: "cyclops flees through the wall", out: /cyclops/i, out2: /(flee|runs|run from|crashes|breaks?\s+(?:down\s+)?(?:through|the wall)|rush)/i, set: [["CYCLOPS-ROOM", "cyclopsGone", true]] },
   { note: "troll dies", out: /troll/i, out2: /(dies|is dead|expire|slain|breathes his|disappear|defeated|killed)/i, set: [["TROLL-ROOM", "trollDead", true]] },
   { note: "grating opens", out: /grating/i, out2: /(opens|is open|swings? (?:up|open))/i, set: [["GRATING-ROOM", "gratingOpen", true]] },
-  { note: "close the grating", cmd: /^close\s+(?:the\s+)?grating\b/, set: [["GRATING-ROOM", "gratingOpen", false]] },
+  { note: "close the grating", cmd: /^close\s+(?:the\s+)?(?:grating|grate)\b/, set: [["GRATING-ROOM", "gratingOpen", false]] },
   { note: "dam gates open", out: /sluice gates open|gates open and water/i, set: [["DAM-ROOM", "gatesOpen", true]] },
   { note: "dam gates close", out: /sluice gates? (?:close|are closed)|gates close/i, set: [["DAM-ROOM", "gatesOpen", false]] },
   // EGYPT-ROOM: the gold coffin
-  { note: "open the coffin", cmd: /^open\s+(?:the\s+)?(?:gold(?:en)?\s+)?coffin\b/, out: /open/i, set: [["EGYPT-ROOM", "coffinOpen", true]] },
-  { note: "close the coffin", cmd: /^close\s+(?:the\s+)?coffin\b/, set: [["EGYPT-ROOM", "coffinOpen", false]] },
+  { note: "open the coffin", cmd: /^open\s+(?:the\s+)?(?:gold(?:en)?\s+)?(?:coffin|casket)\b/, out: /open/i, set: [["EGYPT-ROOM", "coffinOpen", true]] },
+  { note: "close the coffin", cmd: /^close\s+(?:the\s+)?(?:coffin|casket)\b/, set: [["EGYPT-ROOM", "coffinOpen", false]] },
   // RESERVOIR: drains when the dam gates are open (the water level falls)
   { note: "reservoir drains", out: /water level/i, out2: /(fall|drop|lower|empty|recede)/i, set: [["RESERVOIR", "drained", true]] },
   { note: "reservoir refills", act: (c) => { if ((/water level/i.test(c.fresh) && /(ris|fill)/i.test(c.fresh)) || /reservoir.*(fills|full again)/i.test(c.fresh)) c.setRoomFlag("RESERVOIR", "drained", false); } },
   // MIRROR rooms: break the mirror (in whichever mirror room you're in)
   { note: "break the mirror (current room)", act: (c) => { if (c.here && /MIRROR-ROOM/.test(c.here) && /^(?:break|smash|hit|strike)\s+(?:the\s+)?mirror\b/.test(c.cmd) && /(shatter|breaks|smash|pieces|fragment)/i.test(c.fresh)) c.setRoomFlag(c.here, "broken", true); } },
   // DOME-ROOM: tie the rope to the railing
-  { note: "tie the rope to the railing", cmd: /^tie\s+(?:the\s+)?rope\s+to\s+(?:the\s+)?railing\b/, out: /(tie|attach|fasten|drop|secure)/i, set: [["DOME-ROOM", "ropeTied", true]] },
+  { note: "tie the rope to the railing", cmd: /^(?:tie|attach|fasten)\s+(?:the\s+)?rope\s+to\s+(?:the\s+)?rail(?:ing)?\b/, out: /(tie|attach|fasten|drop|secure)/i, set: [["DOME-ROOM", "ropeTied", true]] },
   // GRATING-CLEARING: rake the leaves off the grating
-  { note: "move the leaves", cmd: /^(?:move|push|rake)\s+(?:the\s+)?(?:pile of\s+)?leaves\b/, out: /(grating|reveal|move)/i, set: [["GRATING-CLEARING", "leavesMoved", true]] },
+  { note: "move the leaves", cmd: /^(?:move|push|pull|rake)\s+(?:the\s+)?(?:pile(?: of leaves)?|(?:leaf\s+)?pile|leaves)\b/, out: /(grating|reveal|move)/i, set: [["GRATING-CLEARING", "leavesMoved", true]] },
   // ENTRANCE-TO-HADES: exorcise the spirits
   { note: "spirits exorcised", out: /(spirits|ghosts)/i, out2: /(flee|scatter|banish|depart|vanish|recoil|driven|exorc)/i, set: [["ENTRANCE-TO-HADES", "spiritsGone", true]] },
   // TORCH-ROOM: take the torch off its pedestal
@@ -84,8 +84,8 @@ const TRIGGERS: Trigger[] = [
   // LOUD-ROOM: say "echo" to fix the deafening acoustics
   { note: "say echo", here: "LOUD-ROOM", cmd: /^echo\b/, out: /(acoustic|echo|change|silent|stops?)/i, set: [["LOUD-ROOM", "echoFixed", true]] },
   // SHAFT-ROOM / LOWER-SHAFT: lower or raise the basket on the chain
-  { note: "lower the basket", cmd: /^lower\s+(?:the\s+)?basket\b/, needOk: true, set: [["SHAFT-ROOM", "basketLowered", true]] },
-  { note: "raise the basket", cmd: /^raise\s+(?:the\s+)?basket\b/, needOk: true, set: [["SHAFT-ROOM", "basketLowered", false]] },
+  { note: "lower the basket", cmd: /^lower\s+(?:the\s+)?(?:basket|cage|dumbwaiter)\b/, needOk: true, set: [["SHAFT-ROOM", "basketLowered", true]] },
+  { note: "raise the basket", cmd: /^raise\s+(?:the\s+)?(?:basket|cage|dumbwaiter)\b/, needOk: true, set: [["SHAFT-ROOM", "basketLowered", false]] },
   // CYCLOPS: fed and watered, he falls asleep (fleeing through the wall overrides)
   { note: "cyclops falls asleep", out: /cyclops/i, out2: /(asleep|falls? .*sleep|slumber|snor)/i, set: [["CYCLOPS-ROOM", "cyclopsAsleep", true]] },
   { note: "cyclops wakes", out: /cyclops/i, out2: /(wakes|awakens|yawns and stares)/i, set: [["CYCLOPS-ROOM", "cyclopsAsleep", false]] },
