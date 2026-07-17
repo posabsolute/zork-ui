@@ -60,6 +60,9 @@ export class LocalDialog {
   file_read(ref: FileRef): number[] | null {
     const raw = localStorage.getItem(this.key(ref));
     if (raw === null) return null;
+    // The UI layer snapshots scene flags alongside each game save; announce
+    // reads/writes of SAVE files so it can keep the art in the same timeline.
+    if (ref.usage === "save") window.dispatchEvent(new CustomEvent("zork-savefile", { detail: { mode: "read", key: this.key(ref) } }));
     try {
       const arr = JSON.parse(raw);
       return Array.isArray(arr) ? arr : [];
@@ -71,6 +74,7 @@ export class LocalDialog {
   file_write(ref: FileRef, content: number[] | string, _israw?: boolean): void {
     const data = typeof content === "string" ? [] : content;
     localStorage.setItem(this.key(ref), JSON.stringify(data));
+    if (ref.usage === "save") window.dispatchEvent(new CustomEvent("zork-savefile", { detail: { mode: "write", key: this.key(ref) } }));
   }
 
   // Some GlkApi paths probe this even in non-streaming mode.

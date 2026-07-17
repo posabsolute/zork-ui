@@ -36,8 +36,34 @@ let gameMap: GameMap | null = null;
 // interpreter's own light check), not a fragile attribute heuristic.
 let darkNow = false;
 let lastOutLen = 0;
+// Pristine defaults, captured BEFORE the per-slot overlay — RESTART returns here.
+const PRISTINE_FLAGS: string = JSON.stringify(roomState);
 try { const saved = JSON.parse(localStorage.getItem(ROOMS_KEY) || "{}"); for (const r in saved) for (const k in saved[r]) setRoomFlag(r, k, saved[r][k]); } catch { /* ignore */ }
 let lastCmd = "";
+
+// Replace the scene-flag world wholesale (scenes read roomState live each frame).
+function replaceRoomState(next: Record<string, Record<string, boolean | number | string[]>>) {
+  for (const k of Object.keys(roomState)) delete roomState[k];
+  for (const r in next) roomState[r] = next[r];
+  try { localStorage.setItem(ROOMS_KEY, JSON.stringify(roomState)); } catch { /* quota */ }
+  ambience.setFlags(roomState);
+}
+
+// SAVE / RESTORE continuity: the game's save file only carries Z-machine state,
+// so the scene flags must time-travel with it. Snapshot on save, restore on
+// restore — otherwise a restored game shows a solid rainbow it never earned.
+window.addEventListener("zork-savefile", (e) => {
+  const { mode, key } = (e as CustomEvent).detail as { mode: string; key: string };
+  const flagsKey = key + ":flags";
+  if (mode === "write") {
+    try { localStorage.setItem(flagsKey, JSON.stringify(roomState)); } catch { /* quota */ }
+  } else {
+    try {
+      const snap = JSON.parse(localStorage.getItem(flagsKey) || "null");
+      if (snap) replaceRoomState(snap);
+    } catch { /* corrupt snapshot — keep current flags */ }
+  }
+});
 
 // Read what the player just did and update the relevant ROOM's state, so its
 // scene reflects it. Returns true if anything changed (to trigger a re-render).
@@ -155,6 +181,9 @@ async function startGame() {
         const fresh = txt.slice(lastOutLen);
         lastOutLen = txt.length;
         if (fresh.trim()) darkNow = /pitch black|eaten by a grue|pitch dark|it is dark/i.test(fresh);
+        // The release banner prints only on a fresh game (boot or RESTART) — the
+        // world is new, so the scene flags return to pristine defaults.
+        if (/Release \d+ \/ Serial number \d+/i.test(fresh)) replaceRoomState(JSON.parse(PRISTINE_FLAGS));
         if (/\*{3,}\s*you have died\s*\*{3,}/i.test(fresh)) bigMoment("died");
         else if (/\*{3,}\s*you have won\s*\*{3,}/i.test(fresh)) bigMoment("won");
         const interacted = detectInteractions(lastCmd, fresh);
