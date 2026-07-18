@@ -357,9 +357,9 @@ export class GameMap {
       changed = false;
       for (const id of ids) {
         if (placed.has(id)) continue; const sec = secOf(id); const room = this.rooms[id]; let done = false;
-        if (room) for (const dir of ORDER) { const e = room.exits[dir]; if (e?.to && placed.has(e.to) && secOf(e.to) === sec) { const pos = placed.get(e.to)!; const d = delta(dir) || [0, 0]; const [x, y] = free(sec, pos.x - d[0], pos.y - d[1], -d[0], -d[1]); put(id, x, y); bfs(id); changed = done = true; break; } }
+        if (room) for (const dir of ORDER) { const e = room.exits[dir]; if (e?.to && placed.has(e.to) && secOf(e.to) === sec) { const pos = placed.get(e.to)!; const d = delta(dir)!; const [x, y] = free(sec, pos.x - d[0], pos.y - d[1], -d[0], -d[1]); put(id, x, y); bfs(id); changed = done = true; break; } }
         if (done) continue;
-        for (const pid of [...placed.keys()]) { if (secOf(pid) !== sec) continue; const pr = this.rooms[pid]; if (!pr) continue; for (const dir of ORDER) { const e = pr.exits[dir]; if (e?.to === id) { const pos = placed.get(pid)!; const d = delta(dir) || [1, 0]; const [x, y] = free(sec, pos.x + d[0], pos.y + d[1], d[0] || 1, d[1]); put(id, x, y); bfs(id); changed = done = true; break; } } if (done) break; }
+        for (const pid of [...placed.keys()]) { if (secOf(pid) !== sec) continue; const pr = this.rooms[pid]; if (!pr) continue; for (const dir of ORDER) { const e = pr.exits[dir]; if (e?.to === id) { const pos = placed.get(pid)!; const d = delta(dir)!; const [x, y] = free(sec, pos.x + d[0], pos.y + d[1], d[0], d[1]); put(id, x, y); bfs(id); changed = done = true; break; } } if (done) break; }
       }
     }
     // truly orphaned rooms (teleports): park them just south of their section
@@ -392,7 +392,9 @@ export class GameMap {
 
   private render() {
     const all = [...this.nodes.values()];
+    this.stubs = []; // cleared up front so an early return can't leave stale ghost-clickable stubs
     (this.el.querySelector(".map-count") as HTMLElement).textContent = all.length ? `· ${all.length} found` : "";
+    if (!all.length) { this.info.innerHTML = `<div class="map-dim">Explore to reveal the map.</div>`; return; }
     // ── section tabs: only regions the player has actually entered ──
     const secsSeen = SECTIONS.filter((sc) => all.some((n) => secOf(n.id) === sc.id));
     const curSec = this.current ? secOf(this.current) : "SURFACE";
@@ -410,7 +412,6 @@ export class GameMap {
     this.canvas.style.width = `${cw}px`; this.canvas.style.height = `${ch}px`;
     const p = this.ctx; p.setTransform(dpr, 0, 0, dpr, 0, 0); p.imageSmoothingEnabled = false;
     p.clearRect(0, 0, cw, ch);
-    if (!all.length) { this.info.innerHTML = `<div class="map-dim">Explore to reveal the map.</div>`; return; }
 
     // ── scale: auto-fit this floor, but NEVER below legibility — every box
     // always shows its name (the whole point of a map); overflow pans instead
@@ -456,7 +457,6 @@ export class GameMap {
     const tri = (x: number, y: number, up: boolean, c: string) => { p.fillStyle = c; for (let r = 0; r < 3; r++) { const w = up ? r : 2 - r; p.fillRect(Math.round(x - w), Math.round(y + (up ? r - 1 : -r + 1)), w * 2 + 1, 1); } };
 
     const drawn = new Set<string>();
-    this.stubs = [];
     // a short labelled arrow marking a passage into ANOTHER section — the far
     // side's name only once you've actually been through (the map is a diary)
     const stubTo = (n: MapNode, d: [number, number], toSec: SectionId, target: string) => {
@@ -472,6 +472,7 @@ export class GameMap {
       lx = Math.max(tw / 2 + 2, Math.min(cw - tw / 2 - 2, lx)); ly = Math.max(8, Math.min(ch - 8, ly)); // never clip at the canvas edge
       // two stubs aiming at the same neighbourhood: nudge the label clear
       for (let g = 0; g < 4; g++) { const clash = this.stubs.some((st) => lx - tw / 2 - 4 < st.x + st.w && lx + tw / 2 + 4 > st.x && ly - 8 < st.y + st.h && ly + 8 > st.y); if (!clash) break; ly += uy >= 0 ? 11 : -11; }
+      ly = Math.max(8, Math.min(ch - 8, ly)); // a nudge must not push it off-canvas either
       p.fillStyle = LABEL; p.fillText(name, Math.round(lx), Math.round(ly));
       this.stubs.push({ x: lx - tw / 2 - 4, y: ly - 8, w: tw + 8, h: 16, sec: toSec, target });
     };
@@ -480,6 +481,11 @@ export class GameMap {
       let stairUp = 0, stairDown = 0;
       const exits: [string, { to?: string }][] = Object.entries(room.exits);
       for (const [from, pdir, pto] of PORTALS) if (from === n.id && !room.exits[pdir]?.to) exits.push([pdir, { to: pto }]);
+      // rooms often alias one passage under two names (WEST + IN, EAST + DOWN);
+      // draw ONE stub per far room, truest compass direction winning
+      const rank = (dir: string) => (DELTA[dir] && dir !== "IN" && dir !== "OUT" && dir !== "LAND" ? 0 : dir === "UP" || dir === "DOWN" ? 1 : 2);
+      const xstub = new Map<string, string>(); // target -> best dir
+      for (const [dir, e] of exits) { if (!e.to || secOf(e.to) === this.sec || !this.nodes.has(e.to)) continue; const prev = xstub.get(e.to); if (prev === undefined || rank(dir) < rank(prev)) xstub.set(e.to, dir); }
       for (const [dir, e] of exits) {
         if (!e.to) continue;
         const vert = dir === "UP" || dir === "DOWN";
@@ -488,11 +494,11 @@ export class GameMap {
         if (vert) { // stairs: mark the room corner; gold if the far side is unknown
           const known = !!target;
           if (dir === "UP") stairUp = known ? 1 : 2; else stairDown = known ? 1 : 2;
-          if (target && toSec !== this.sec) stubTo(n, VDELTA[dir], toSec, e.to); // stairs into another region
+          if (target && toSec !== this.sec && xstub.get(e.to) === dir) stubTo(n, VDELTA[dir], toSec, e.to); // stairs into another region
           if (!target || toSec !== this.sec) continue; // known same-section stairs fall through and draw as a diagonal
         }
         const d = delta(dir); if (!d) continue;
-        if (target && toSec !== this.sec) { if (!vert) stubTo(n, d, toSec, e.to); continue; }
+        if (target && toSec !== this.sec) { if (!vert && xstub.get(e.to) === dir) stubTo(n, d, toSec, e.to); continue; }
         if (target) {
           const key = [n.id, e.to].sort().join("|"); if (drawn.has(key)) continue; drawn.add(key);
           const [ax, ay] = anchorPt(n, d);
@@ -556,8 +562,11 @@ export class GameMap {
     const sel = this.selected ? this.nodes.get(this.selected) : null;
     if (!sel) { this.info.innerHTML = ""; return; }
     const room = this.rooms[sel.id];
-    const exitDirs = room ? Object.keys(room.exits).filter((d) => room.exits[d].to) : [];
-    const untried = room ? exitDirs.filter((d) => { const to = room.exits[d].to!; return !this.nodes.has(to); }) : [];
+    const exitTo = new Map<string, string>();
+    if (room) for (const [d, e] of Object.entries(room.exits)) if (e.to) exitTo.set(d, e.to);
+    for (const [from, pdir, pto] of PORTALS) if (from === sel.id && !exitTo.has(pdir)) exitTo.set(pdir, pto); // the trap door and friends are exits too
+    const exitDirs = [...exitTo.keys()];
+    const untried = exitDirs.filter((d) => !this.nodes.has(exitTo.get(d)!));
     // NOTE: room contents are deliberately NOT listed — discovering what a place
     // holds is the game; the clue command is the sanctioned nudge.
     // exits are TAPPABLE when you're looking at the room you're standing in —
