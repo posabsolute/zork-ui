@@ -213,6 +213,7 @@ html, body {
 /* floor tabs — one automap floor at a time, crawler-style */
 .map-floors {
   display: flex;
+  flex-wrap: wrap; /* section names are longer than the old floor numbers */
   gap: 4px;
   padding: 6px 12px 0;
 }

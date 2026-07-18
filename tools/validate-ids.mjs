@@ -39,6 +39,18 @@ for (const m of src.triggers.matchAll(/\[\s*"([A-Z0-9-]+)",\s*"\w+",\s*(?:true|f
 for (const m of src.scenes.matchAll(/^  "([A-Z0-9-]+)": \(ctx/gm)) {
   checkRoom(m[1], `scene registry`);
 }
+// the map's REGION table — every id real, every room covered (sectioned map)
+const mapSrc = readFileSync("src/ui/map.ts", "utf8");
+const regionIds = [...mapSrc.matchAll(/^  "([A-Z0-9-]+)": "[A-Z]+",$/gm)].map((m) => m[1]);
+if (regionIds.length < 100) errors.push(`map REGION scan found only ${regionIds.length} entries — pattern or file moved?`);
+for (const id of regionIds) checkRoom(id, "map REGION table");
+for (const id of Object.keys(rooms)) if (!regionIds.includes(id)) errors.push(`room "${id}" missing from map REGION table (src/ui/map.ts)`);
+
+// the map's curated PORTALS — both ends must be real rooms
+for (const m of mapSrc.matchAll(/\["([A-Z0-9-]+)", "[A-Z]+", "([A-Z0-9-]+)"\]/g)) {
+  checkRoom(m[1], `map PORTALS: ${m[0]}`); checkRoom(m[2], `map PORTALS: ${m[0]}`);
+}
+
 // the clue table — every key must be a real room
 const clueKeys = [...src.clues.matchAll(/^  "([A-Z0-9-]+)": \(\) =>/gm)];
 if (clueKeys.length < 20) errors.push(`clue table scan found only ${clueKeys.length} entries — pattern or file moved?`);
