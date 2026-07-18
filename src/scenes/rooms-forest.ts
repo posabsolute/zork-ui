@@ -1,6 +1,6 @@
 // scenes/rooms-forest.ts — the forest, clearings, and canyon above ground.
 
-import { hasObj, rf, isRainbowSolid } from "./state.ts";
+import { hasObj, rf, isRainbowSolid, hasObjKnown } from "./state.ts";
 import { arches, canyonBackdrop, caveBackdrop, ditherGlow, dth, fgTreePixel, fillDisc, fireflies, forestBackdrop, hash, housePixel, litCave, mailboxPixel, pixelBackdrop, pixelCanopy, pixelPath, pixelStage, pixelTree, rainPixel, rainbowArc, ridge, sandBand, sp, treasureGlint, waterFill, waterfall, whiteCliff } from "./kit.ts";
 
 export function westOfHousePixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
@@ -158,6 +158,8 @@ export function onRainbowPixel(ctx: CanvasRenderingContext2D, w: number, h: numb
     waterfall(p, Math.round(pw * 0.7), Math.round(pw * 0.1), Math.round(ph * 0.18), Math.round(ph * 0.5), t);
     // the rainbow you stand upon — a broad band sweeping across, foreground as a road
     const solid = isRainbowSolid();
+    const potKnown = solid && hasObjKnown("END-OF-RAINBOW", "POT-OF-GOLD");
+    const potGy = Math.round(ph * 0.88);
     const cols = ["#d8504a", "#e0913a", "#e8d24a", "#5ab85a", "#4a8ad8", "#6a4ad8", "#a04ad8"];
     for (let b = 0; b < 7; b++) { p.fillStyle = cols[b]; for (let x = 0; x < pw; x++) { const y = Math.round(ph * 0.7 + b * 4 + Math.sin(x * 0.012) * ph * 0.06); for (let yy = y; yy < y + 4; yy++) if ((solid ? 1.01 : 0.85) > dth(x, yy)) p.fillRect(x, yy, 1, 1); } }
     if (solid) { p.fillStyle = "#fff6d8"; for (let x = 0; x < pw; x += 2) if (hash(x, 7) > 0.55) p.fillRect(x, Math.round(ph * 0.7 + Math.sin(x * 0.012) * ph * 0.06) - 1, 1, 1); } // the walkable edge, hard and glinting
@@ -183,31 +185,109 @@ export function aragainFallsPixel(ctx: CanvasRenderingContext2D, w: number, h: n
       const f = (y - ph * 0.8) / (ph * 0.2), drift = Math.sin(x * 0.05 + t * 0.8) * 2;
       if ((0.3 + f * 0.45) > dth(x + Math.round(drift), y)) { p.fillStyle = f > 0.5 ? "#eaf2f8" : "#b8ccdc"; p.fillRect(x, y, 1, 1); }
     }
-    rainbowArc(p, pw, ph, isRainbowSolid()); // the famous rainbow, spanning the falls
+    rainbowArc(p, pw, ph, isRainbowSolid(), t); // the famous rainbow, spanning the falls
     void t;
   });
 }
 
 export function endOfRainbowPixel(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   pixelStage(ctx, w, h, 256, (p, pw, ph) => {
-    const hz = canyonBackdrop(p, pw, ph, false, false);
-    whiteCliff(p, Math.round(pw * 0.84), pw, Math.round(ph * 0.08), Math.round(ph * 0.78)); // White Cliffs
-    waterFill(p, pw, Math.round(ph * 0.5), Math.round(ph * 0.74), t, "#356a8c", "#234e6c"); // river
-    sandBand(p, 0, pw, Math.round(ph * 0.74), ph); // rocky beach
-    const solid = isRainbowSolid();
-    const cols = ["#d8504a", "#e0913a", "#e8d24a", "#5ab85a", "#4a8ad8", "#6a4ad8", "#a04ad8"];
-    for (let b = 0; b < 7; b++) { p.fillStyle = cols[b]; for (let a = Math.PI * 1.05; a < Math.PI * 1.5; a += 0.01) { const x = Math.round(pw * 1.05 + Math.cos(a) * (ph * 0.85 - b * 2.5)), y = Math.round(ph * 1.1 + Math.sin(a) * (ph * 0.85 - b * 2.5)); if (y >= 0 && y < ph && x >= 0 && x < pw && (solid ? 1.01 : 0.8) > dth(x, y)) p.fillRect(x, y, 1, 1); } } // rainbow east — solid once the sceptre is waved
-    if (solid && hasObj("END-OF-RAINBOW", "POT-OF-GOLD")) {
-      // the pot of gold, revealed at the rainbow's foot on the beach
-      const gx = Math.round(pw * 0.72), gy = ph - Math.round(ph * 0.12);
-      p.fillStyle = "#241a08"; p.fillRect(gx - 8, gy + 5, 17, 2); // its shadow in the sand
-      for (let yy = 0; yy < 7; yy++) { const wd = Math.round(7 - Math.abs(yy - 3) * 0.8); p.fillStyle = yy < 2 ? "#101418" : "#1c2228"; p.fillRect(gx - wd, gy - 2 + yy, wd * 2 + 1, 1); } // squat black pot
-      p.fillStyle = "#3a444c"; p.fillRect(gx - 7, gy - 2, 2, 5); // rim light on the iron
-      p.fillStyle = "#e8c24a"; p.fillRect(gx - 4, gy - 4, 9, 2); p.fillRect(gx - 2, gy - 5, 5, 1); // gold heaped over the brim
-      p.fillStyle = "#fff0b0"; p.fillRect(gx, gy - 5, 1, 1); p.fillRect(gx + 3, gy - 4, 1, 1); // coins catching the light
-      treasureGlint(p, gx - 3, gy - 7, t, "#ffe9a0");
+    // "You are on a small, rocky beach on the continuation of the Frigid River
+    // past the Falls. The beach is narrow due to the presence of the White
+    // Cliffs. The river canyon opens here and sunlight shines in from above.
+    // A rainbow crosses over the falls to the east and a narrow path continues
+    // to the southwest."  Every element below is that sentence, in order.
+    const poolY = Math.round(ph * 0.72), beachY = Math.round(ph * 0.86);
+    // the canyon opens overhead: daylight sky, brightening toward the rim
+    const sky = ["#dceefa", "#b6d8ee", "#93bede", "#7aa8cc"];
+    for (let y = 0; y < poolY; y++) { const f = y / poolY;
+      for (let x = 0; x < pw; x++) { const idx = Math.max(0, Math.min(3, Math.floor(f * 4 + (dth(x, y) - 0.5) * 0.7))); p.fillStyle = sky[idx]; p.fillRect(x, y, 1, 1); } }
+    // downstream haze: the canyon walls falling away to the southwest
+    p.fillStyle = "#8fa8bc"; for (let x = 0; x < pw; x++) { const hgt = Math.round(ph * 0.16 + Math.sin(x * 0.03 + 2) * 4 + hash(x >> 2, 11) * 4); p.fillRect(x, poolY - hgt, 1, hgt); }
+    p.fillStyle = "#7492a8"; for (let x = 0; x < pw; x++) { const hgt = Math.round(ph * 0.09 + Math.sin(x * 0.05) * 3 + hash(x >> 2, 12) * 3); p.fillRect(x, poolY - hgt, 1, hgt); }
+    // sunlight shining in from above: a dithered shaft slanting onto the water
+    for (let y = 0; y < beachY; y++) { const cx = pw * 0.30 + y * 0.10, hw = 12 + y * 0.30;
+      for (let x = Math.round(cx - hw); x < cx + hw; x++) { const sfr = Math.max(0, 1 - Math.abs(x - cx) / hw) * 0.30; if (sfr > dth(x, y)) { p.fillStyle = "#f2f9fd"; p.fillRect(x, y, 1, 1); } } }
+    // the east canyon wall, in its own shade, the falls cut into it
+    const nx0 = Math.round(pw * 0.66), nx1 = Math.round(pw * 0.86);
+    const eEdge = (y: number) => Math.round(pw * 0.55 + (Math.sin(y * 0.15) * 2 + (hash(9, y >> 1) - 0.5) * 4) * (0.25 + 0.75 * y / poolY));
+    for (let y = 0; y < poolY; y++) { const e = eEdge(y);
+      for (let x = e; x < pw; x++) { const depth = y / poolY, n = hash(x, y), tex = 0.3 + 0.7 * depth;
+        const v = 44 + depth * 26; let cr = v, cg = v * 0.86, cb = v * 0.74;
+        if (n > 0.84) { cr += 18 * tex; cg += 15 * tex; cb += 12 * tex; } else if (n < 0.14) { cr -= 12 * tex; cg -= 10 * tex; cb -= 8 * tex; }
+        p.fillStyle = `rgb(${Math.round(cr)},${Math.round(cg)},${Math.round(cb)})`; p.fillRect(x, y, 1, 1); }
+      p.fillStyle = "#8a7a62"; p.fillRect(e, y, 1, 1); // sun grazing its edge
     }
-    void hz;
+    p.fillStyle = "#0c0a08"; p.fillRect(nx0 - 2, 0, 2, poolY); p.fillRect(nx1, 0, 2, poolY); // the falls' shadowed flanks
+    waterfall(p, nx0, nx1 - nx0, 0, poolY + 2, t); // the Falls, brink out of sight overhead
+    // the White Cliffs hemming the beach in from the west
+    const wEdge = (y: number) => Math.round(pw * 0.12 + Math.sin(y * 0.09) * 3 + (hash(4, y >> 1) - 0.5) * 4);
+    for (let y = 0; y < beachY; y++) { const e = wEdge(y);
+      for (let x = 0; x < e; x++) { const k = hash(x >> 1, y >> 2), lit = 1 - (y / beachY) * 0.30;
+        const base = k > 0.74 ? [207, 201, 189] : k < 0.16 ? [160, 154, 142] : [187, 180, 166];
+        p.fillStyle = `rgb(${Math.round(base[0] * lit)},${Math.round(base[1] * lit)},${Math.round(base[2] * lit)})`; p.fillRect(x, y, 1, 1);
+        if ((y % 11) === 5 && hash(x >> 3, y) > 0.6) { p.fillStyle = "#948e82"; p.fillRect(x, y, 1, 1); } }
+      p.fillStyle = "#e6e0d2"; p.fillRect(e - 1, y, 1, 1); // its sunlit east face
+    }
+    // the Frigid River, continuing past the Falls
+    for (let y = poolY; y < beachY; y++) for (let x = 0; x < pw; x++) { p.fillStyle = (0.5 + 0.1 * Math.sin(y * 0.9)) > dth(x, y) ? "#3a7c9e" : "#2a5878"; p.fillRect(x, y, 1, 1); }
+    waterFill(p, pw, poolY, beachY, t, "#3a7c9e", "#2a5878");
+    for (let x = nx0 - 5; x < nx1 + 5; x++) { const yy = poolY + 1 + ((x + Math.floor(t * 6)) % 3); p.fillStyle = hash(x, Math.floor(t * 4)) > 0.4 ? "#eef7fc" : "#cfe4ee"; p.fillRect(x, yy, 1, 1); } // churn at the plunge
+    for (let i = 0; i < 16; i++) { const x = Math.round(pw * 0.16 + hash(i, 15) * pw * 0.45), y = poolY + 1 + Math.round(hash(i, 16) * (beachY - poolY - 2)); if (Math.sin(t * 4 + i * 2.2) > 0.45) { p.fillStyle = "#ffffff"; p.fillRect(x, y, 1, 1); } } // sun glitter on the water
+    for (let i = 0; i < 24; i++) { // mist rising where the falls land
+      const mx = nx0 - 5 + Math.round(hash(i, 5) * (nx1 - nx0 + 10) + Math.sin(t * 0.9 + i) * 3);
+      const my = poolY - 1 - Math.round(((hash(i, 6) * 12 + t * 5 + i) % 12));
+      if (hash(i, Math.floor(t * 2)) > 0.35) { p.fillStyle = my < poolY - 7 ? "#cddbe6" : "#e8f1f7"; p.fillRect(mx, my, 1, 1); }
+    }
+    // the small rocky beach, in the sun
+    for (let y = beachY; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const k = hash(x, y); p.fillStyle = k > 0.8 ? "#8a7d68" : k > 0.35 ? "#6a5f4e" : "#55493c"; p.fillRect(x, y, 1, 1); }
+    for (let i = 0; i < 22; i++) { const x = Math.round(hash(i, 21) * pw), y = beachY + 1 + Math.round(hash(i, 22) * (ph - beachY - 2)); p.fillStyle = "#9a8c74"; p.fillRect(x, y, 2, 1); p.fillStyle = "#b0a288"; p.fillRect(x, y - 1, 1, 1); }
+    // the narrow path, continuing southwest out of frame
+    for (let i = 0; i < 40; i++) { const f = i / 40; const px = Math.round(pw * 0.34 * (1 - f) - 2 + Math.sin(f * 5) * 2), py = beachY + 2 + Math.round(f * (ph - beachY - 4)); if (px >= 0) { p.fillStyle = hash(i, 27) > 0.5 ? "#a89878" : "#8f8064"; p.fillRect(px, py, 2, 1); } }
+    for (let x = 0; x < pw; x++) if (hash(x, Math.floor(t * 3)) > 0.82) { p.fillStyle = "#d8e8f0"; p.fillRect(x, beachY, 1, 1); } // water lapping the shore
+    const solid = isRainbowSolid();
+    const potKnown = solid && hasObjKnown("END-OF-RAINBOW", "POT-OF-GOLD");
+    const gx = Math.round(pw * 0.24), gy = ph - 9;
+    // the rainbow: one end on this beach, crossing over the falls to the east
+    { const Fx = pw * 0.24, Fy = ph * 0.97, Tx = pw + 4, Ty = ph * 0.10;
+      const acy = ph * 1.5;
+      const acx = (Tx * Tx + Ty * Ty - Fx * Fx - Fy * Fy + 2 * acy * (Fy - Ty)) / (2 * (Tx - Fx));
+      const R = Math.hypot(acx - Tx, acy - Ty);
+      let a0 = Math.atan2(Fy - acy, Fx - acx); if (a0 < 0) a0 += Math.PI * 2;
+      let a1 = Math.atan2(Ty - acy, Tx - acx); while (a1 <= a0) a1 += Math.PI * 2;
+      const cols = ["#c9524c", "#d3893f", "#d9c352", "#5fae5f", "#4f84c4", "#655bc4", "#9155b8"];
+      const W = 14;
+      for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+        const dx = x - acx, dy = y - acy, d = Math.hypot(dx, dy);
+        const off = R - d; if (off < 0 || off >= W) continue;
+        let a = Math.atan2(dy, dx); if (a < 0) a += Math.PI * 2;
+        if (a < a0 - 0.01 || a > a1) continue;
+        if (potKnown && y > gy - 8 && x < pw * 0.34) continue; // it ends IN the pot
+        const bandF = off / 2, b = Math.min(6, Math.floor(bandF)), frac = bandF - b;
+        const bi = frac > 0.5 + (dth(x, y) - 0.5) * 0.9 && b < 6 ? b + 1 : b;
+        const edge = Math.min(1, Math.min(off + 0.5, W - off) / 2.5);
+        const wave = solid ? 1 : 0.78 + 0.22 * Math.sin(a * 22 - t * 3 + off * 0.35);
+        const vis = edge * wave * (solid ? 1.5 : 1.1);
+        if (vis > dth(x + (solid ? 0 : Math.floor(t * 2)), y)) { p.fillStyle = cols[bi]; p.fillRect(x, y, 1, 1); }
+      }
+      if (solid) { p.fillStyle = "#fff6d8"; const r = R + 1; // glinting outer edge — solid enough to walk
+        for (let a = a0; a < a1; a += 0.008) { const x = Math.round(acx + Math.cos(a) * r), y = Math.round(acy + Math.sin(a) * r); if (y >= 0 && y < ph && x >= 0 && x < pw && hash(x, 3) > 0.5) p.fillRect(x, y, 1, 1); } }
+      else { p.fillStyle = "#ffffff"; // glints winking along the bow
+        for (let i = 0; i < 12; i++) { const a = a0 + hash(i, 31) * (a1 - a0), r = R - 2 - hash(i, 32) * (W - 4); const x = Math.round(acx + Math.cos(a) * r), y = Math.round(acy + Math.sin(a) * r); if (y >= 0 && y < ph && x >= 0 && x < pw && Math.sin(t * 3 + i * 1.7) > 0.45) p.fillRect(x, y, 1, 1); } }
+    }
+    if (potKnown) { // the pot of gold, right where the rainbow comes down
+      for (let yy = gy + 4; yy < gy + 7; yy++) for (let xx = gx - 9; xx < gx + 10; xx++) { const ex = (xx - gx) / 9, ey = (yy - gy - 5) / 1.6; if (ex * ex + ey * ey < 1 && dth(xx, yy) < 0.6) { p.fillStyle = "#3a3226"; p.fillRect(xx, yy, 1, 1); } }
+      const rows = [5, 7, 8, 8, 8, 7, 5];
+      for (let yy = 0; yy < rows.length; yy++) { p.fillStyle = "#1c2126"; p.fillRect(gx - rows[yy], gy - 2 + yy, rows[yy] * 2 + 1, 1); }
+      p.fillStyle = "#3a4854"; for (let yy = 1; yy < 6; yy++) p.fillRect(gx - rows[yy] + 1, gy - 2 + yy, 2, 1);
+      p.fillStyle = "#48525c"; p.fillRect(gx - 6, gy - 3, 13, 1);
+      p.fillStyle = "#14171a"; p.fillRect(gx - 6, gy + 5, 2, 2); p.fillRect(gx + 5, gy + 5, 2, 2);
+      p.fillStyle = "#c89a2e"; p.fillRect(gx - 5, gy - 5, 11, 2); p.fillStyle = "#e8c24a"; p.fillRect(gx - 4, gy - 6, 9, 1); p.fillRect(gx - 2, gy - 7, 5, 1);
+      p.fillStyle = "#8a6a1e"; p.fillRect(gx - 2, gy - 4, 1, 1); p.fillRect(gx + 2, gy - 5, 1, 1);
+      p.fillStyle = "#fff0b0"; p.fillRect(gx, gy - 7, 1, 1); p.fillRect(gx + 3, gy - 6, 1, 1);
+      treasureGlint(p, gx, gy - 10, t, "#ffe9a0");
+    }
   });
 }
 

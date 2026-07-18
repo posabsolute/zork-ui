@@ -1418,11 +1418,16 @@ export function riverBase(p: CanvasRenderingContext2D, pw: number, ph: number, t
   return wy;
 }
 
-export function rainbowArc(p: CanvasRenderingContext2D, pw: number, ph: number, solid = false) {
+export function rainbowArc(p: CanvasRenderingContext2D, pw: number, ph: number, solid = false, t = 0) {
   const cols = ["#d8504a", "#e0913a", "#e8d24a", "#5ab85a", "#4a8ad8", "#6a4ad8", "#a04ad8"];
   const cx = pw * 0.5, cy = ph * 1.25, R = ph * 1.05;
-  const th = solid ? 1.01 : 0.75; // solid: every pixel commits — you could walk on it
-  for (let b = 0; b < 7; b++) { const r = R - b * 2.5; for (let a = Math.PI * 1.04; a < Math.PI * 1.96; a += 0.008) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if (y >= 0 && y < ph && x >= 0 && x < pw && th > dth(x, y)) { p.fillStyle = cols[b]; p.fillRect(x, y, 1, 1); } } }
+  for (let b = 0; b < 7; b++) { const r = R - b * 2; for (let a = Math.PI * 1.04; a < Math.PI * 1.96; a += 0.004) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r);
+    // solid commits every pixel — you could walk on it; otherwise waves of
+    // visibility slide along the arc so it shimmers like light, not paint
+    const th = solid ? 1.01 : 0.62 + 0.18 * Math.sin(a * 12 - t * 2.2 + b * 0.7);
+    if (y >= 0 && y < ph - 1 && x >= 0 && x < pw - 1 && th > dth(x, y)) { p.fillStyle = cols[b]; p.fillRect(x, y, 2, 2); } } }
+  if (!solid) { p.fillStyle = "#ffffff"; // stray glints winking along the bow
+    for (let i = 0; i < 14; i++) { const a = Math.PI * (1.06 + hash(i, 31) * 0.88), r = R - hash(i, 32) * 12; const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if (y >= 0 && y < ph && x >= 0 && x < pw && Math.sin(t * 3 + i * 1.7) > 0.55) p.fillRect(x, y, 1, 1); } }
   if (solid) { p.fillStyle = "#fff6d8"; const r = R + 1.5; for (let a = Math.PI * 1.04; a < Math.PI * 1.96; a += 0.02) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if (y >= 0 && y < ph && x >= 0 && x < pw && hash(x, 3) > 0.5) p.fillRect(x, y, 1, 1); } } // a hard glinting upper edge
 }
 

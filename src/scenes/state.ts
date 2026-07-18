@@ -54,6 +54,11 @@ export function treasuresOf(room: string): string[] { const v = roomState[room]?
 // room. A room with no recorded contents yet defaults to PRESENT (first visit).
 export function hasObj(room: string, id: string): boolean { const v = roomState[room]?.objects; return !Array.isArray(v) || (v as string[]).includes(id); }
 
+// strict variant: the prop is drawn ONLY once the game has confirmed the object
+// is really there (recorded contents include it). For surprises the player must
+// not see early, like the pot of gold.
+export function hasObjKnown(room: string, id: string): boolean { const v = roomState[room]?.objects; return Array.isArray(v) && (v as string[]).includes(id); }
+
 // ── Shared world state ────────────────────────────────────────────────────
 // A few flags are WRITTEN in one room but READ by several. These accessors are
 // the only sanctioned way to read them across rooms, so the sharing is explicit

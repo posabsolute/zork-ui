@@ -22,7 +22,7 @@ const checkObj = (id, where) => { if (!(id in objects) && !OBJECT_ALIASES.has(id
 
 // hasObj("ROOM", "ID") / roomStillHas("ROOM", "ID") — scene props and clue gates
 for (const [name, text] of Object.entries(src)) {
-  for (const m of text.matchAll(/(?:hasObj|roomStillHas)\("([A-Z0-9-]+)",\s*"([A-Z0-9-]+)"\)/g)) {
+  for (const m of text.matchAll(/(?:hasObj|hasObjKnown|roomStillHas)\("([A-Z0-9-]+)",\s*"([A-Z0-9-]+)"\)/g)) {
     checkRoom(m[1], `${name}: ${m[0]}`);
     checkObj(m[2], `${name}: ${m[0]}`);
   }
