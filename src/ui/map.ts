@@ -287,6 +287,9 @@ export class GameMap {
     window.addEventListener("resize", () => this.render());
     this.load();
     this.relayout();
+    if (import.meta.env.DEV) { // dev oracle: dump layout for invariant checks
+      (window as unknown as Record<string, unknown>).__mapDump = () => [...this.nodes.values()].map((n) => ({ id: n.id, sec: secOf(n.id), x: n.x, y: n.y }));
+    }
     if (this.current) this.sec = secOf(this.current);
     this.render();
     // the @ pulses — a slow, cheap heartbeat redraw
@@ -414,7 +417,7 @@ export class GameMap {
     const minx = Math.min(...ns.map((n) => n.x)), maxx = Math.max(...ns.map((n) => n.x));
     const miny = Math.min(...ns.map((n) => n.y)), maxy = Math.max(...ns.map((n) => n.y));
     const cols = Math.max(1, maxx - minx + 1), rows = Math.max(1, maxy - miny + 1);
-    const fit = Math.max(52, Math.min(84, Math.floor(Math.min((cw - 30) / cols, (ch - 30) / rows))));
+    const fit = Math.max(52, Math.min(84, Math.floor(Math.min((cw - 76) / cols, (ch - 44) / rows)))); // margin leaves room for cross-section stub labels
     const cell = Math.round(fit * (this.userZoomed ? this.zoom : 1));
     if (!this.userZoomed) this.zoom = 1;
     const bw = Math.max(38, Math.round(cell * 0.86)), bh = Math.max(22, Math.round(cell * 0.52)); // room box, sized for its name
@@ -465,7 +468,10 @@ export class GameMap {
       p.beginPath(); p.moveTo(5, 0); p.lineTo(-2, -3.5); p.lineTo(-2, 3.5); p.closePath(); p.fill(); p.restore();
       const name = SECTIONS.find((sc) => sc.id === toSec)?.name ?? toSec;
       const tw = name.length * fontPx * 0.62;
-      const lx = tx2 + ux * (7 + tw / 2), ly = ty2 + uy * 8 + (uy === 0 ? -6 : 0);
+      let lx = tx2 + ux * (7 + tw / 2); let ly = ty2 + uy * 8 + (uy === 0 ? -6 : 0);
+      lx = Math.max(tw / 2 + 2, Math.min(cw - tw / 2 - 2, lx)); ly = Math.max(8, Math.min(ch - 8, ly)); // never clip at the canvas edge
+      // two stubs aiming at the same neighbourhood: nudge the label clear
+      for (let g = 0; g < 4; g++) { const clash = this.stubs.some((st) => lx - tw / 2 - 4 < st.x + st.w && lx + tw / 2 + 4 > st.x && ly - 8 < st.y + st.h && ly + 8 > st.y); if (!clash) break; ly += uy >= 0 ? 11 : -11; }
       p.fillStyle = LABEL; p.fillText(name, Math.round(lx), Math.round(ly));
       this.stubs.push({ x: lx - tw / 2 - 4, y: ly - 8, w: tw + 8, h: 16, sec: toSec, target });
     };
